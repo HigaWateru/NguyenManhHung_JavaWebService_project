@@ -17,10 +17,12 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     List<Booking> findByBookingDate(LocalDate bookingDate);
     List<Booking> findByBookingDateAndStatus(LocalDate bookingDate, BookingStatus status);
+    List<Booking> findByBookingDateAndStatusAndCourtClusterManagerUsername(LocalDate bookingDate, BookingStatus status,
+                                                                            String managerUsername);
 
     @Query("select b from Booking b join fetch b.court join fetch b.user where b.id = :bookingId")
     Optional<Booking> findDetailedById(Long bookingId);
 
-    boolean existsByCourtIdAndBookingDateAndTimeSlotAndStatusIn(Long courtId, LocalDate bookingDate, String timeSlot, List<BookingStatus> statuses);
+    List<Booking> findByCourtIdAndBookingDateAndStatusIn(Long courtId, LocalDate bookingDate, List<BookingStatus> statuses);
 }
 

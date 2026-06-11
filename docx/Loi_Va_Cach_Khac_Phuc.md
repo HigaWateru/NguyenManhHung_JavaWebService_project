@@ -57,3 +57,35 @@
 #### 5. Khuyến nghị
 - Nên chuẩn hóa `jwt.secret` theo một định dạng thống nhất (khuyến nghị Base64/Base64URL hợp lệ và đủ độ dài cho thuật toán HMAC).
 - Có thể bổ sung validate lúc startup để fail-fast với thông báo rõ ràng khi secret không hợp lệ.
+
+---
+
+### Báo cáo lỗi và Giải pháp khắc phục (Manager Booking - thiếu query param `date`/`status`)
+
+#### 1. Mô tả lỗi (Issue)
+- **API bị lỗi**: `GET /api/v1/manager/bookings`
+- **Request thực tế**: gọi endpoint với Bearer token manager nhưng **không truyền query param**.
+- **Thông báo nhận được**:
+  - `Required request parameter 'date' for method parameter type LocalDate is not present`
+  - Response đang trả `status: 500`.
+
+#### 2. Nguyên nhân kỹ thuật
+- Trong `ManagerBookingController.java`, method `byDateAndStatus(...)` khai báo:
+  - `@RequestParam LocalDate date`
+  - `@RequestParam BookingStatus status`
+- Hai tham số này là **bắt buộc**. Khi không truyền, Spring ném `MissingServletRequestParameterException`.
+- `GlobalExceptionHandler.java` hiện chưa có handler riêng cho exception này, nên rơi vào `@ExceptionHandler(Exception.class)` và bị map thành HTTP `500`.
+
+#### 3. Kết luận lỗi bạn đang gặp
+- **Lỗi gốc**: thiếu query param bắt buộc (`date`, `status`) khi gọi endpoint manager booking.
+- **Vì sao thấy 500**: do cơ chế bắt lỗi tổng quát hiện tại, không phải lỗi server thực sự.
+- **HTTP đúng theo semantics nên là**: `400 Bad Request`.
+
+#### 4. Cách gọi đúng endpoint
+- Ví dụ hợp lệ:
+  - `GET /api/v1/manager/bookings?date=2026-06-11&status=CONFIRMED`
+- `status` phải thuộc enum `BookingStatus`: `PENDING`, `CONFIRMED`, `CANCELLED`, `COMPLETED`.
+
+#### 5. Khuyến nghị cải thiện
+- Bổ sung handler cho `MissingServletRequestParameterException` trong `GlobalExceptionHandler` để trả `400` và message rõ ràng hơn.
+- Có thể thêm ví dụ query param vào tài liệu API để tránh gọi thiếu tham số.

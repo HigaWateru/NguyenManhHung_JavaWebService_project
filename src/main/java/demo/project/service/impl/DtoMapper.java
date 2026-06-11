@@ -16,11 +16,10 @@ public final class DtoMapper {
     }
 
     public static BookingResponse toBookingResponse(Booking booking) {
-        return BookingResponse.builder()
-            .id(booking.getId()).courtId(booking.getCourt().getId()).courtName(booking.getCourt().getCourtName())
-            .timeSlot(booking.getTimeSlot()).bookingDate(booking.getBookingDate()).totalPrice(booking.getTotalPrice())
-            .status(booking.getStatus()).username(booking.getUser().getUsername()).createdAt(booking.getCreatedAt())
-            .build();
+        return BookingResponse.builder().id(booking.getId()).courtId(booking.getCourt().getId())
+            .courtName(booking.getCourt().getCourtName()).timeSlot(booking.getTimeSlot())
+            .bookingDate(booking.getBookingDate()).totalPrice(booking.getTotalPrice()).status(booking.getStatus())
+            .username(booking.getUser().getUsername()).createdAt(booking.getCreatedAt()).build();
     }
 }
 

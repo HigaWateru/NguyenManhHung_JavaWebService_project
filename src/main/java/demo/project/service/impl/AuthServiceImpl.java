@@ -45,20 +45,16 @@ public class AuthServiceImpl implements AuthService {
     public AuthResponse login(LoginRequest request) {
         authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword()));
 
-        User user = userRepository.findByUsername(request.getUsername())
-            .filter(User::isEnabled)
+        User user = userRepository.findByUsername(request.getUsername()).filter(User::isEnabled)
             .orElseThrow(() -> new AppException(HttpStatus.UNAUTHORIZED, "Invalid credentials"));
 
         String accessToken = jwtService.generateAccessToken(user.getUsername(), user.getRole());
         String refreshToken = jwtService.generateRefreshToken(user.getUsername());
 
         refreshTokenRepository.deleteByUserId(user.getId());
-        refreshTokenRepository.save(RefreshToken.builder()
-            .token(refreshToken)
-            .user(user)
+        refreshTokenRepository.save(RefreshToken.builder().token(refreshToken).user(user)
             .expiresAt(LocalDateTime.ofInstant(Instant.now().plusSeconds(jwtProperties.getRefreshTokenDays() * 86400), ZoneOffset.UTC))
-            .revoked(false)
-            .build());
+            .revoked(false).build());
 
         return buildAuthResponse(accessToken, refreshToken);
     }
@@ -81,8 +77,7 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public void logout(String bearerToken) {
         String token = extractToken(bearerToken);
-        tokenBlacklistRepository.save(TokenBlacklist.builder()
-            .token(token)
+        tokenBlacklistRepository.save(TokenBlacklist.builder().token(token)
             .expiryTime(LocalDateTime.ofInstant(jwtService.extractExpiration(token), ZoneOffset.UTC))
             .build());
 
@@ -103,14 +98,10 @@ public class AuthServiceImpl implements AuthService {
             throw new AppException(HttpStatus.CONFLICT, "Email already exists");
         }
 
-        User user = userRepository.save(User.builder()
-            .username(request.getUsername())
-            .fullName(request.getUsername())
-            .email(request.getEmail())
-            .password(passwordEncoder.encode(request.getPassword()))
-            .role(request.getRole())
-            .enabled(true)
-            .build());
+        User user = userRepository.save(User.builder().username(request.getUsername())
+            .fullName(request.getUsername()).email(request.getEmail())
+            .password(passwordEncoder.encode(request.getPassword())).role(request.getRole())
+            .enabled(true).build());
 
         return DtoMapper.toUserResponse(user);
     }
@@ -136,11 +127,8 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private AuthResponse buildAuthResponse(String accessToken, String refreshToken) {
-        return AuthResponse.builder()
-            .accessToken(accessToken)
-            .refreshToken(refreshToken)
-            .tokenType("Bearer")
-            .expiresInSeconds(jwtProperties.getAccessTokenMinutes() * 60)
+        return AuthResponse.builder().accessToken(accessToken).refreshToken(refreshToken)
+            .tokenType("Bearer").expiresInSeconds(jwtProperties.getAccessTokenMinutes() * 60)
             .build();
     }
 
