@@ -1,8 +1,8 @@
-# Luong upload anh san voi Cloudinary
+# Luồng upload ảnh sân với Cloudinary
 
-Tai lieu nay mo ta luong upload anh san dang co trong code hien tai.
+Tài liệu này mô tả luồng upload ảnh sau khi bổ sung validate và phân quyền.
 
-## 1) Thanh phan lien quan
+## 1) Thành phần liên quan
 
 - Config: `src/main/java/demo/project/config/CloudinaryConfig.java`
 - Controller: `src/main/java/demo/project/controller/FileController.java`
@@ -12,53 +12,72 @@ Tai lieu nay mo ta luong upload anh san dang co trong code hien tai.
 - Error handling: `src/main/java/demo/project/exception/GlobalExceptionHandler.java`
 - Security rule: `src/main/java/demo/project/config/SecurityConfig.java`
 
-## 2) Endpoint va authentication
+## 2) Endpoint và authentication
 
 - Method: `POST`
 - URL: `/api/v1/files/upload/court/{courtId}`
 - Content-Type: `multipart/form-data`
-- Form field bat buoc: `file`
-- Authentication: bat buoc dang nhap (`Authorization: Bearer <access_token>`)
+- Form field bắt buộc: `file`
+- Authentication: bắt buộc đăng nhập (`Authorization: Bearer <access_token>`)
 
-> Theo `SecurityConfig`, route `POST /api/v1/files/**` yeu cau authenticated.
+> Theo `SecurityConfig`, route `POST /api/v1/files/**` chỉ cho role `ADMIN` hoặc `MANAGER`.
 
-## 3) Cau hinh Cloudinary
+## 3) Cấu hình Cloudinary
 
-Ung dung doc 3 property trong profile dang chay:
+Ứng dụng đọc 3 property trong profile đang chạy:
 
 - `cloudinary.cloud-name`
 - `cloudinary.api-key`
 - `cloudinary.api-secret`
 
-`CloudinaryConfig` tao bean `Cloudinary` tu 3 gia tri tren.
+`CloudinaryConfig` tạo bean `Cloudinary` từ 3 giá trị trên.
 
-## 4) Luong xu ly chi tiet
+## 4) Rule validate và phân quyền
 
-Khi client goi API upload anh, he thong xu ly theo thu tu:
+### 4.1 Validate file
 
-1. Security filter xac thuc JWT bearer token.
-2. `FileController#uploadCourtImage(...)` nhan `courtId` va `MultipartFile file`.
-3. Service kiem tra `file` khac null va khong rong.
-4. Service tim `Court` theo `courtId`.
-5. Service goi Cloudinary uploader de upload bytes cua file.
-6. Lay `secure_url` tu ket qua Cloudinary.
-7. Gan URL vao truong `image` cua `Court`.
-8. Luu lai `Court` va tra `secureUrl` trong `ApiResponse<FileUploadResponse>`.
+- Chỉ chấp nhận content type: `image/jpeg`, `image/png`, `image/webp`, `image/gif`.
+- Dung lượng tối đa: `50MB`.
+- Kích thước tối đa: `5000x5000` pixels.
+- File rỗng/null sẽ bị từ chối.
 
-## 5) Dau vao / dau ra mau
+### 4.2 Rule quyền upload
 
-### 5.1 Request (multipart)
+- `ADMIN`: được upload ảnh cho mọi sân.
+- `MANAGER`: chỉ được upload ảnh cho sân thuộc cụm sân mà manager đang quản lý.
+- Nếu manager upload sân không thuộc quyền -> trả `403`.
+
+## 5) Luồng xử lý chi tiết
+
+Khi client gọi API upload ảnh, hệ thống xử lý theo thứ tự:
+
+1. Security filter xác thực JWT và check role (`ADMIN`/`MANAGER`).
+2. `FileController#uploadCourtImage(...)` nhận `courtId`, `MultipartFile file`, `Authentication`.
+3. Controller xác định caller có phải admin không.
+4. Service validate file (type, size <= 50MB, image dimensions <= 5000x5000).
+5. Service tìm `Court` theo `courtId`.
+6. Service check quyền upload theo role:
+   - admin: pass
+   - manager: phải là manager của cluster của court
+7. Service upload bytes lên Cloudinary.
+8. Lấy `secure_url` từ kết quả Cloudinary.
+9. Gán URL vào trường `image` của `Court` và save.
+10. Trả `ApiResponse<FileUploadResponse>`.
+
+## 6) Đầu vào / đầu ra mẫu
+
+### 6.1 Request (multipart)
 
 - Path variable: `courtId` (vd: `1`)
 - Form-data:
   - key: `file`
   - type: File
-  - value: chon anh (`.jpg`, `.png`, ...)
+  - value: chọn ảnh (`.jpg`, `.png`, ...)
 
-### 5.2 Success response
+### 6.2 Success response
 
 - HTTP status: `200 OK`
-- Body mau:
+- Body mẫu:
 
 ```json
 {
@@ -70,20 +89,29 @@ Khi client goi API upload anh, he thong xu ly theo thu tu:
 }
 ```
 
-## 6) Cac loi chinh
+## 7) Các lỗi chính
 
 - `400 Bad Request`:
-  - file null/rong -> `File is required`
+  - file null/rỗng -> `File is required`
+- `400 Bad Request`:
+  - sai loại file -> `Only image file types are allowed (jpeg, png, webp, gif)`
+- `400 Bad Request`:
+  - vượt 50MB -> `File size must be less than or equal to 50MB`
+- `400 Bad Request`:
+  - file ảnh không hợp lệ -> `Invalid image file`
+- `400 Bad Request`:
+  - kích thước ảnh vượt ngưỡng -> `Image dimensions exceed allowed limit: max 5000x5000 pixels`
 - `401 Unauthorized`:
-  - thieu bearer token / token khong hop le
+  - thiếu bearer token / token không hợp lệ
+- `403 Forbidden`:
+  - role không được phép hoặc manager không sở hữu sân -> `You are not allowed to upload image for this court`
 - `404 Not Found`:
-  - `courtId` khong ton tai -> `Court not found`
+  - `courtId` không tồn tại -> `Court not found`
 - `503 Service Unavailable`:
-  - loi IO tu cloud storage (duoc map boi `GlobalExceptionHandler`)
+  - lỗi IO từ cloud storage (được map bởi `GlobalExceptionHandler`)
 
-## 7) Ghi chu nghiep vu hien tai
+## 8) Ghi chú nghiệp vụ hiện tại
 
-- Upload thanh cong se ghi de URL anh moi vao `Court.image`.
-- Hien tai chua validate loai file, dung luong, kich thuoc anh, hoac quyen role cu the.
-- Hien tai endpoint cho phep moi user da dang nhap goi upload (khong gioi han theo manager/admin).
+- Upload thành công sẽ ghi đè URL ảnh mới vào `Court.image`.
+- Giới hạn multipart trong app đã đặt: `spring.servlet.multipart.max-file-size=50MB` và `spring.servlet.multipart.max-request-size=50MB`.
 
