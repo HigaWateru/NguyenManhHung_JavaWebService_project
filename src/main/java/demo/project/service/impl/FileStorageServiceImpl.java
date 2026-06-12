@@ -32,11 +32,11 @@ public class FileStorageServiceImpl implements FileStorageService {
 
     @Override
     @Transactional
-    public String uploadCourtImage(Long courtId, MultipartFile file, String username, boolean isAdmin) throws IOException {
+    public String uploadCourtImage(Long courtId, MultipartFile file, String username) throws IOException {
         validateFile(file);
 
         Court court = courtRepository.findById(courtId).orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Court not found"));
-        validateUploadPermission(court, username, isAdmin);
+        validateUploadPermission(court, username);
 
         Map<?, ?> result = cloudinary.uploader().upload(file.getBytes(), Map.of());
         String imageUrl = String.valueOf(result.get("secure_url"));
@@ -68,11 +68,7 @@ public class FileStorageServiceImpl implements FileStorageService {
         }
     }
 
-    private static void validateUploadPermission(Court court, String username, boolean isAdmin) {
-        if (isAdmin) {
-            return;
-        }
-
+    private static void validateUploadPermission(Court court, String username) {
         BadmintonCluster cluster = court.getCluster();
         String managerUsername = cluster == null || cluster.getManager() == null ? null : cluster.getManager().getUsername();
 

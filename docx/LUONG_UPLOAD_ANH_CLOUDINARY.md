@@ -20,7 +20,7 @@ Tài liệu này mô tả luồng upload ảnh sau khi bổ sung validate và ph
 - Form field bắt buộc: `file`
 - Authentication: bắt buộc đăng nhập (`Authorization: Bearer <access_token>`)
 
-> Theo `SecurityConfig`, route `POST /api/v1/files/**` chỉ cho role `ADMIN` hoặc `MANAGER`.
+> Theo `SecurityConfig`, route `POST /api/v1/files/**` chỉ cho role `MANAGER`.
 
 ## 3) Cấu hình Cloudinary
 
@@ -43,22 +43,20 @@ Tài liệu này mô tả luồng upload ảnh sau khi bổ sung validate và ph
 
 ### 4.2 Rule quyền upload
 
-- `ADMIN`: được upload ảnh cho mọi sân.
-- `MANAGER`: chỉ được upload ảnh cho sân thuộc cụm sân mà manager đang quản lý.
+- Chỉ `MANAGER` được gọi API upload.
+- `MANAGER` chỉ được upload ảnh cho sân thuộc cụm sân mà manager đang quản lý.
 - Nếu manager upload sân không thuộc quyền -> trả `403`.
 
 ## 5) Luồng xử lý chi tiết
 
 Khi client gọi API upload ảnh, hệ thống xử lý theo thứ tự:
 
-1. Security filter xác thực JWT và check role (`ADMIN`/`MANAGER`).
+1. Security filter xác thực JWT và check role `MANAGER`.
 2. `FileController#uploadCourtImage(...)` nhận `courtId`, `MultipartFile file`, `Authentication`.
-3. Controller xác định caller có phải admin không.
+3. Controller truyền `username` hiện tại xuống service.
 4. Service validate file (type, size <= 50MB, image dimensions <= 5000x5000).
 5. Service tìm `Court` theo `courtId`.
-6. Service check quyền upload theo role:
-   - admin: pass
-   - manager: phải là manager của cluster của court
+6. Service check `username` phải là manager của cluster chứa court.
 7. Service upload bytes lên Cloudinary.
 8. Lấy `secure_url` từ kết quả Cloudinary.
 9. Gán URL vào trường `image` của `Court` và save.

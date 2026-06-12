@@ -20,9 +20,7 @@ public class FileController {
     @PostMapping("/upload/court/{courtId}")
     public ResponseEntity<ApiResponse<FileUploadResponse>> uploadCourtImage(@PathVariable Long courtId, Authentication authentication,
             @RequestParam("file") MultipartFile file) throws IOException {
-        boolean isAdmin = authentication.getAuthorities().stream()
-            .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
-        String secureUrl = fileStorageService.uploadCourtImage(courtId, file, authentication.getName(), isAdmin);
+        String secureUrl = fileStorageService.uploadCourtImage(courtId, file, authentication.getName());
         return ResponseEntity.ok(ApiResponse.success("File uploaded successfully", FileUploadResponse.builder().secureUrl(secureUrl).build()));
     }
 }
