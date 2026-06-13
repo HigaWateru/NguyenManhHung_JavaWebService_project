@@ -33,7 +33,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/v1/manager/**").hasRole("MANAGER")
                 .requestMatchers("/api/v1/customer/**").hasRole("CUSTOMER")
-                .requestMatchers(HttpMethod.POST, "/api/v1/files/**").hasRole("MANAGER")
+                .requestMatchers("/api/v1/files/**").hasRole("MANAGER")
                 .requestMatchers(HttpMethod.POST, "/api/v1/auth/logout", "/api/v1/auth/change-password").authenticated()
                 .anyRequest().permitAll()
             ).sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

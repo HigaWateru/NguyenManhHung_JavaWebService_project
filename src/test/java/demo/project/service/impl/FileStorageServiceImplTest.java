@@ -5,6 +5,7 @@ import demo.project.entity.BadmintonCluster;
 import demo.project.entity.Court;
 import demo.project.entity.User;
 import demo.project.exception.AppException;
+import demo.project.repository.CourtImageRepository;
 import demo.project.repository.CourtRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,6 +32,9 @@ class FileStorageServiceImplTest {
     @Mock
     private CourtRepository courtRepository;
 
+    @Mock
+    private CourtImageRepository courtImageRepository;
+
     @InjectMocks
     private FileStorageServiceImpl fileStorageService;
 
@@ -39,7 +43,7 @@ class FileStorageServiceImplTest {
         MockMultipartFile file = new MockMultipartFile("file", "note.txt", "text/plain", "hello".getBytes());
 
         AppException ex = assertThrows(AppException.class,
-            () -> fileStorageService.uploadCourtImage(1L, file, "manager.a"));
+            () -> fileStorageService.addCourtImage(1L, file, "manager.a"));
 
         assertEquals(400, ex.getStatus().value());
         assertEquals("Only image file types are allowed (jpeg, png, webp, gif)", ex.getMessage());
@@ -51,7 +55,7 @@ class FileStorageServiceImplTest {
         MockMultipartFile file = new MockMultipartFile("file", "big.png", "image/png", content);
 
         AppException ex = assertThrows(AppException.class,
-            () -> fileStorageService.uploadCourtImage(1L, file, "manager.a"));
+            () -> fileStorageService.addCourtImage(1L, file, "manager.a"));
 
         assertEquals(400, ex.getStatus().value());
         assertEquals("File size must be less than or equal to 50MB", ex.getMessage());
@@ -63,7 +67,7 @@ class FileStorageServiceImplTest {
         MockMultipartFile file = new MockMultipartFile("file", "large-dim.png", "image/png", imageBytes);
 
         AppException ex = assertThrows(AppException.class,
-            () -> fileStorageService.uploadCourtImage(1L, file, "manager.a"));
+            () -> fileStorageService.addCourtImage(1L, file, "manager.a"));
 
         assertEquals(400, ex.getStatus().value());
         assertEquals("Image dimensions exceed allowed limit: max 5000x5000 pixels", ex.getMessage());
@@ -81,10 +85,10 @@ class FileStorageServiceImplTest {
         when(courtRepository.findById(1L)).thenReturn(Optional.of(court));
 
         AppException ex = assertThrows(AppException.class,
-            () -> fileStorageService.uploadCourtImage(1L, file, "manager.b"));
+            () -> fileStorageService.addCourtImage(1L, file, "manager.b"));
 
         assertEquals(403, ex.getStatus().value());
-        assertEquals("You are not allowed to upload image for this court", ex.getMessage());
+        assertEquals("You are not allowed to manage images for this court", ex.getMessage());
     }
 
     private static byte[] createPng(int width, int height) throws IOException {

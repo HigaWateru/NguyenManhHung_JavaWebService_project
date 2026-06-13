@@ -1,7 +1,5 @@
 package demo.project.entity;
 
-import demo.project.entity.BadmintonCluster;
-import demo.project.entity.Booking;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -24,9 +22,6 @@ public class Court {
     @Column(length = 50)
     private String type;
 
-    @Column(length = 255)
-    private String image;
-
     @Column(name = "is_available")
     private Boolean isAvailable;
 
@@ -37,4 +32,8 @@ public class Court {
     @OneToMany(mappedBy = "court", fetch = FetchType.LAZY)
     @Builder.Default
     private List<Booking> bookings = new ArrayList<>();
+
+    @OneToMany(mappedBy = "court", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<CourtImage> images = new ArrayList<>();
 }

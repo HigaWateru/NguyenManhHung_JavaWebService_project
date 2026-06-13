@@ -1,115 +1,80 @@
-# Luồng upload ảnh sân với Cloudinary
+# Luồng quản lý ảnh sân với Cloudinary (1 sân nhiều ảnh)
 
-Tài liệu này mô tả luồng upload ảnh sau khi bổ sung validate và phân quyền.
+Tài liệu này mô tả luồng CRUD ảnh sau khi chuyển sang hướng entity riêng `CourtImage`.
 
 ## 1) Thành phần liên quan
 
-- Config: `src/main/java/demo/project/config/CloudinaryConfig.java`
+- Entity: `src/main/java/demo/project/entity/CourtImage.java`
+- Entity cập nhật: `src/main/java/demo/project/entity/Court.java`
+- Repository: `src/main/java/demo/project/repository/CourtImageRepository.java`
 - Controller: `src/main/java/demo/project/controller/FileController.java`
 - Service interface: `src/main/java/demo/project/service/FileStorageService.java`
 - Service impl: `src/main/java/demo/project/service/impl/FileStorageServiceImpl.java`
-- DTO response: `src/main/java/demo/project/dto/response/FileUploadResponse.java`
-- Error handling: `src/main/java/demo/project/exception/GlobalExceptionHandler.java`
+- DTO response: `src/main/java/demo/project/dto/response/CourtImageResponse.java`
 - Security rule: `src/main/java/demo/project/config/SecurityConfig.java`
 
-## 2) Endpoint và authentication
+## 2) Endpoint và xác thực
 
-- Method: `POST`
-- URL: `/api/v1/files/upload/court/{courtId}`
-- Content-Type: `multipart/form-data`
-- Form field bắt buộc: `file`
-- Authentication: bắt buộc đăng nhập (`Authorization: Bearer <access_token>`)
+Tất cả endpoint dưới đây đều cần `Authorization: Bearer <access_token>` và role `MANAGER`:
 
-> Theo `SecurityConfig`, route `POST /api/v1/files/**` chỉ cho role `MANAGER`.
+- `POST /api/v1/files/courts/{courtId}/images` -> Thêm ảnh mới cho sân
+- `GET /api/v1/files/courts/{courtId}/images` -> Lấy danh sách ảnh của sân
+- `PUT /api/v1/files/courts/{courtId}/images/{imageId}` -> Cập nhật ảnh theo `imageId`
+- `DELETE /api/v1/files/courts/{courtId}/images/{imageId}` -> Xóa ảnh theo `imageId`
 
-## 3) Cấu hình Cloudinary
+## 3) Rule validate và phân quyền
 
-Ứng dụng đọc 3 property trong profile đang chạy:
-
-- `cloudinary.cloud-name`
-- `cloudinary.api-key`
-- `cloudinary.api-secret`
-
-`CloudinaryConfig` tạo bean `Cloudinary` từ 3 giá trị trên.
-
-## 4) Rule validate và phân quyền
-
-### 4.1 Validate file
+### 3.1 Validate file
 
 - Chỉ chấp nhận content type: `image/jpeg`, `image/png`, `image/webp`, `image/gif`.
 - Dung lượng tối đa: `50MB`.
 - Kích thước tối đa: `5000x5000` pixels.
-- File rỗng/null sẽ bị từ chối.
+- File null/rỗng bị từ chối.
 
-### 4.2 Rule quyền upload
+### 3.2 Rule quyền quản lý ảnh
 
-- Chỉ `MANAGER` được gọi API upload.
-- `MANAGER` chỉ được upload ảnh cho sân thuộc cụm sân mà manager đang quản lý.
-- Nếu manager upload sân không thuộc quyền -> trả `403`.
+- Chỉ manager mới được CRUD ảnh sân.
+- Manager chỉ được thao tác trên sân thuộc cụm sân mình quản lý.
+- Sai quyền trả `403` với message: `You are not allowed to manage images for this court`.
 
-## 5) Luồng xử lý chi tiết
+## 4) Luồng xử lý
 
-Khi client gọi API upload ảnh, hệ thống xử lý theo thứ tự:
+### 4.1 Thêm ảnh
 
-1. Security filter xác thực JWT và check role `MANAGER`.
-2. `FileController#uploadCourtImage(...)` nhận `courtId`, `MultipartFile file`, `Authentication`.
-3. Controller truyền `username` hiện tại xuống service.
-4. Service validate file (type, size <= 50MB, image dimensions <= 5000x5000).
-5. Service tìm `Court` theo `courtId`.
-6. Service check `username` phải là manager của cluster chứa court.
-7. Service upload bytes lên Cloudinary.
-8. Lấy `secure_url` từ kết quả Cloudinary.
-9. Gán URL vào trường `image` của `Court` và save.
-10. Trả `ApiResponse<FileUploadResponse>`.
+1. Xác thực JWT và role manager.
+2. Validate file upload.
+3. Tìm `Court` theo `courtId` và check manager sở hữu.
+4. Upload lên Cloudinary, lấy `secure_url` + `public_id`.
+5. Lưu bản ghi mới `CourtImage` (`court_id`, `image_url`, `public_id`).
+6. Trả về `CourtImageResponse`.
 
-## 6) Đầu vào / đầu ra mẫu
+### 4.2 Cập nhật ảnh
 
-### 6.1 Request (multipart)
+1. Validate file mới.
+2. Check manager có quyền trên `courtId`.
+3. Tìm ảnh theo `imageId` và `courtId`.
+4. Upload ảnh mới lên Cloudinary.
+5. Cập nhật `image_url/public_id` trong `CourtImage`.
+6. Thử xóa ảnh cũ trên Cloudinary theo `public_id` cũ (best effort).
 
-- Path variable: `courtId` (vd: `1`)
-- Form-data:
-  - key: `file`
-  - type: File
-  - value: chọn ảnh (`.jpg`, `.png`, ...)
+### 4.3 Xóa ảnh
 
-### 6.2 Success response
+1. Check manager có quyền trên `courtId`.
+2. Tìm ảnh theo `imageId` + `courtId`.
+3. Xóa bản ghi `CourtImage` trong DB.
+4. Thử xóa file trên Cloudinary theo `public_id` (best effort).
 
-- HTTP status: `200 OK`
-- Body mẫu:
+## 5) Các lỗi chính
 
-```json
-{
-  "success": true,
-  "message": "File uploaded successfully",
-  "data": {
-    "secureUrl": "https://res.cloudinary.com/.../image/upload/...jpg"
-  }
-}
-```
+- `400 Bad Request`: file invalid/quá dung lượng/quá kích thước.
+- `401 Unauthorized`: token thiếu/hết hạn/sai.
+- `403 Forbidden`: manager không sở hữu sân.
+- `404 Not Found`: `courtId` không tồn tại hoặc `imageId` không thuộc sân.
+- `503 Service Unavailable`: lỗi IO cloud khi upload ảnh.
 
-## 7) Các lỗi chính
+## 6) Ghi chú nghiệp vụ
 
-- `400 Bad Request`:
-  - file null/rỗng -> `File is required`
-- `400 Bad Request`:
-  - sai loại file -> `Only image file types are allowed (jpeg, png, webp, gif)`
-- `400 Bad Request`:
-  - vượt 50MB -> `File size must be less than or equal to 50MB`
-- `400 Bad Request`:
-  - file ảnh không hợp lệ -> `Invalid image file`
-- `400 Bad Request`:
-  - kích thước ảnh vượt ngưỡng -> `Image dimensions exceed allowed limit: max 5000x5000 pixels`
-- `401 Unauthorized`:
-  - thiếu bearer token / token không hợp lệ
-- `403 Forbidden`:
-  - role không được phép hoặc manager không sở hữu sân -> `You are not allowed to upload image for this court`
-- `404 Not Found`:
-  - `courtId` không tồn tại -> `Court not found`
-- `503 Service Unavailable`:
-  - lỗi IO từ cloud storage (được map bởi `GlobalExceptionHandler`)
-
-## 8) Ghi chú nghiệp vụ hiện tại
-
-- Upload thành công sẽ ghi đè URL ảnh mới vào `Court.image`.
-- Giới hạn multipart trong app đã đặt: `spring.servlet.multipart.max-file-size=50MB` và `spring.servlet.multipart.max-request-size=50MB`.
+- Đã bỏ hướng lưu 1 URL duy nhất trong `Court.image`; thay bằng quan hệ `Court` 1-n `CourtImage`.
+- Mỗi ảnh có `id` riêng để update/xóa chính xác theo `courtId` + `imageId`.
+- Giới hạn multipart vẫn giữ nguyên: `50MB`.
 

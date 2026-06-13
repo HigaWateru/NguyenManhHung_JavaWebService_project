@@ -14,5 +14,6 @@ public interface AuthService {
     UserResponse register(RegisterRequest request);
     void changePassword(String username, ChangePasswordRequest request);
     void forgotPassword(String email);
+    String verifyForgotPasswordOtp(String email, String otp);
 }
 

@@ -1,8 +1,8 @@
-# Mau test API (method, body, authentication, token)
+# Mẫu test API (method, body, authentication, token)
 
-Tai lieu nay tong hop cac mau test nhanh cho nhung chuc nang hien co trong du an.
+Tài liệu này tổng hợp các mẫu test nhanh cho những chức năng hiện có trong dự án.
 
-## 1) Chuan bi bien moi truong
+## 1) Chuẩn bị biến môi trường
 
 ```bash
 BASE_URL=http://localhost:8080
@@ -12,14 +12,14 @@ CUSTOMER_USERNAME=customer.a
 PASSWORD=123456
 ```
 
-> Luu y:
-> - Password seed theo `DATA_SEED.md` la `123456`.
-> - API duoi `/api/v1/auth/**` khong can bearer token (tru `change-password`, `logout`).
-> - API duoi `/api/v1/admin/**`, `/api/v1/manager/**`, `/api/v1/customer/**` can JWT access token.
+> Lưu ý:
+> - Password seed theo `DATA_SEED.md` là `123456`.
+> - API dưới `/api/v1/auth/**` không cần bearer token (trừ `change-password`, `logout`).
+> - API dưới `/api/v1/admin/**`, `/api/v1/manager/**`, `/api/v1/customer/**` cần JWT access token.
 
-## 2) Luong lay token (Auth)
+## 2) Luồng lấy token (Auth)
 
-### 2.1 Login admin de lay access token + refresh token
+### 2.1 Login admin để lấy access token + refresh token
 
 - Method: `POST`
 - URL: `/api/v1/auth/login`
@@ -105,7 +105,7 @@ PASSWORD=123456
 }
 ```
 
-### 2.8 Forgot password (ban hien tai chi check email ton tai)
+### 2.8 Forgot password (gửi OTP về email)
 
 - Method: `POST`
 - URL: `/api/v1/auth/forgot-password`
@@ -113,13 +113,28 @@ PASSWORD=123456
 
 ```json
 {
-  "email": "customer.a@example.com"
+  "email": "customer.a@badminton.local"
 }
 ```
 
-## 3) Test nhom Admin User API
+### 2.9 Verify OTP để nhận mật khẩu mới
 
-Su dung token cua admin (`Authorization: Bearer <ADMIN_ACCESS_TOKEN>`).
+- Method: `POST`
+- URL: `/api/v1/auth/forgot-password/verify-otp`
+- Authentication: `None`
+
+```json
+{
+  "email": "customer.a@badminton.local",
+  "otp": "123456"
+}
+```
+
+> Kết quả thành công trả về `data` là mật khẩu mới tạm thời. Nên đăng nhập và đổi mật khẩu ngay.
+
+## 3) Test nhóm Admin User API
+
+Sử dụng token của admin (`Authorization: Bearer <ADMIN_ACCESS_TOKEN>`).
 
 ### 3.1 Search users
 
@@ -163,11 +178,11 @@ Su dung token cua admin (`Authorization: Bearer <ADMIN_ACCESS_TOKEN>`).
 - URL: `/api/v1/admin/users/{id}`
 - Body: `None`
 
-## 4) Test nhom Customer Booking API
+## 4) Test nhóm Customer Booking API
 
-Su dung token cua customer (`Authorization: Bearer <CUSTOMER_ACCESS_TOKEN>`).
+Sử dụng token của customer (`Authorization: Bearer <CUSTOMER_ACCESS_TOKEN>`).
 
-### 4.1 Tao booking
+### 4.1 Tạo booking
 
 - Method: `POST`
 - URL: `/api/v1/customer/bookings`
@@ -181,23 +196,23 @@ Su dung token cua customer (`Authorization: Bearer <CUSTOMER_ACCESS_TOKEN>`).
 }
 ```
 
-### 4.2 Lay booking cua toi
+### 4.2 Lấy booking của tôi
 
 - Method: `GET`
 - URL: `/api/v1/customer/bookings`
 - Body: `None`
 
-## 5) Test nhom Manager Booking API (duyet/tu choi san thuoc manager)
+## 5) Test nhóm Manager Booking API (duyệt/từ chối sân thuộc manager)
 
-Su dung token manager (`Authorization: Bearer <MANAGER_ACCESS_TOKEN>`).
+Sử dụng token manager (`Authorization: Bearer <MANAGER_ACCESS_TOKEN>`).
 
-### 5.1 Loc booking theo ngay + trang thai trong pham vi manager
+### 5.1 Lọc booking theo ngày + trạng thái trong phạm vi manager
 
 - Method: `GET`
 - URL: `/api/v1/manager/bookings?date=2026-06-12&status=PENDING`
 - Body: `None`
 
-### 5.2 Manager duyet booking
+### 5.2 Manager duyệt booking
 
 - Method: `PATCH`
 - URL: `/api/v1/manager/bookings/{bookingId}/status`
@@ -208,7 +223,7 @@ Su dung token manager (`Authorization: Bearer <MANAGER_ACCESS_TOKEN>`).
 }
 ```
 
-### 5.3 Manager tu choi booking
+### 5.3 Manager từ chối booking
 
 - Method: `PATCH`
 - URL: `/api/v1/manager/bookings/{bookingId}/status`
@@ -219,17 +234,17 @@ Su dung token manager (`Authorization: Bearer <MANAGER_ACCESS_TOKEN>`).
 }
 ```
 
-## 6) Test nhom Admin Booking API (duyet/tu choi toan he thong)
+## 6) Test nhóm Admin Booking API (duyệt/từ chối toàn hệ thống)
 
-Su dung token admin (`Authorization: Bearer <ADMIN_ACCESS_TOKEN>`).
+Sử dụng token admin (`Authorization: Bearer <ADMIN_ACCESS_TOKEN>`).
 
-### 6.1 Loc booking theo ngay + trang thai toan he thong
+### 6.1 Lọc booking theo ngày + trạng thái toàn hệ thống
 
 - Method: `GET`
 - URL: `/api/v1/admin/bookings?date=2026-06-12&status=PENDING`
 - Body: `None`
 
-### 6.2 Admin duyet booking
+### 6.2 Admin duyệt booking
 
 - Method: `PATCH`
 - URL: `/api/v1/admin/bookings/{bookingId}/status`
@@ -240,7 +255,7 @@ Su dung token admin (`Authorization: Bearer <ADMIN_ACCESS_TOKEN>`).
 }
 ```
 
-### 6.3 Admin tu choi booking
+### 6.3 Admin từ chối booking
 
 - Method: `PATCH`
 - URL: `/api/v1/admin/bookings/{bookingId}/status`
@@ -251,20 +266,55 @@ Su dung token admin (`Authorization: Bearer <ADMIN_ACCESS_TOKEN>`).
 }
 ```
 
-## 7) Mau negative test nen co
+## 7) Test nhóm Manager Court Image API (1 sân nhiều ảnh)
 
-1. Login sai password -> mong doi `401`.
-2. Goi API admin bang token customer -> mong doi `403`.
-3. Duyet booking voi `status = COMPLETED` -> mong doi `400 Invalid status`.
-4. Duyet booking khong ton tai -> mong doi `404 Booking not found`.
-5. Manager duyet booking khong thuoc cum san minh quan ly -> mong doi `403`.
-6. Duyet lai booking da `CONFIRMED`/`CANCELLED` -> mong doi `409`.
-7. Tao booking trung khung gio -> mong doi `409 Booking already exists`.
+Sử dụng token manager (`Authorization: Bearer <MANAGER_ACCESS_TOKEN>`).
 
-## 8) Huong dan trich token khi test Postman
+### 7.1 Thêm ảnh mới cho sân
 
-1. Goi `POST /api/v1/auth/login`.
-2. Copy `data.accessToken` gan vao header `Authorization: Bearer <token>`.
-3. Copy `data.refreshToken` de test endpoint refresh.
-4. Sau khi goi logout, token do bi blacklist va khong dung lai duoc.
+- Method: `POST`
+- URL: `/api/v1/files/courts/{courtId}/images`
+- Body type: `form-data`
+- Field:
+  - `file` (type `File`)
+
+### 7.2 Lấy danh sách ảnh của sân
+
+- Method: `GET`
+- URL: `/api/v1/files/courts/{courtId}/images`
+- Body: `None`
+
+### 7.3 Cập nhật ảnh theo imageId
+
+- Method: `PUT`
+- URL: `/api/v1/files/courts/{courtId}/images/{imageId}`
+- Body type: `form-data`
+- Field:
+  - `file` (type `File`)
+
+### 7.4 Xóa ảnh theo imageId
+
+- Method: `DELETE`
+- URL: `/api/v1/files/courts/{courtId}/images/{imageId}`
+- Body: `None`
+
+## 8) Mẫu negative test nên có
+
+1. Login sai password -> mong đợi `401`.
+2. Gọi API admin bằng token customer -> mong đợi `403`.
+3. Duyệt booking với `status = COMPLETED` -> mong đợi `400 Invalid status`.
+4. Duyệt booking không tồn tại -> mong đợi `404 Booking not found`.
+5. Manager duyệt booking không thuộc cụm sân mình quản lý -> mong đợi `403`.
+6. Duyệt lại booking đã `CONFIRMED`/`CANCELLED` -> mong đợi `409`.
+7. Tạo booking trùng khung giờ -> mong đợi `409 Booking already exists`.
+8. Upload ảnh với token customer -> mong đợi `403`.
+9. Manager A sửa/xóa ảnh của sân thuộc manager B -> mong đợi `403`.
+10. Sửa/xóa `imageId` không thuộc `courtId` -> mong đợi `404 Court image not found`.
+
+## 9) Hướng dẫn trích token khi test Postman
+
+1. Gọi `POST /api/v1/auth/login`.
+2. Copy `data.accessToken` gắn vào header `Authorization: Bearer <token>`.
+3. Copy `data.refreshToken` để test endpoint refresh.
+4. Sau khi gọi logout, token đó bị blacklist và không dùng lại được.
 

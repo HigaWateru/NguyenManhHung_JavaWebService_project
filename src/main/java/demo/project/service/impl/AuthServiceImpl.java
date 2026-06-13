@@ -6,10 +6,12 @@ import demo.project.dto.request.RefreshTokenRequest;
 import demo.project.dto.request.RegisterRequest;
 import demo.project.dto.response.AuthResponse;
 import demo.project.dto.response.UserResponse;
+import demo.project.entity.PasswordResetOtp;
 import demo.project.entity.RefreshToken;
 import demo.project.entity.TokenBlacklist;
 import demo.project.entity.User;
 import demo.project.exception.AppException;
+import demo.project.repository.PasswordResetOtpRepository;
 import demo.project.repository.RefreshTokenRepository;
 import demo.project.repository.TokenBlacklistRepository;
 import demo.project.repository.UserRepository;
@@ -17,7 +19,11 @@ import demo.project.security.jwt.JwtProperties;
 import demo.project.security.jwt.JwtService;
 import demo.project.service.AuthService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.mail.MailException;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -25,6 +31,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -32,13 +39,28 @@ import java.time.ZoneOffset;
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
+    private static final int OTP_LENGTH = 6;
+    private static final long OTP_EXPIRE_MINUTES = 5;
+    private static final int MAX_OTP_FAILED_ATTEMPTS = 5;
+    private static final int GENERATED_PASSWORD_LENGTH = 10;
+
+    private static final String OTP_ALPHABET = "0123456789";
+    private static final String PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@#$%";
+
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
     private final JwtProperties jwtProperties;
     private final UserRepository userRepository;
+    private final PasswordResetOtpRepository passwordResetOtpRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final TokenBlacklistRepository tokenBlacklistRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JavaMailSender mailSender;
+
+    @Value("${spring.mail.username}")
+    private String mailFrom;
 
     @Override
     @Transactional
@@ -121,9 +143,56 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    @Transactional
     public void forgotPassword(String email) {
-        userRepository.findByEmail(email)
+        User user = userRepository.findByEmail(email)
             .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Email not found"));
+
+        LocalDateTime now = LocalDateTime.now();
+        passwordResetOtpRepository.deleteByExpiresAtBefore(now);
+        passwordResetOtpRepository.deleteByUserId(user.getId());
+
+        String otp = generateRandomValue(OTP_ALPHABET, OTP_LENGTH);
+
+        PasswordResetOtp otpEntity = PasswordResetOtp.builder().user(user).otpHash(passwordEncoder.encode(otp))
+            .expiresAt(now.plusMinutes(OTP_EXPIRE_MINUTES)).verified(false).failedAttempts(0).createdAt(now).build();
+        passwordResetOtpRepository.save(otpEntity);
+
+        sendForgotPasswordOtpMail(user.getEmail(), otp);
+    }
+
+    @Override
+    @Transactional
+    public String verifyForgotPasswordOtp(String email, String otp) {
+        User user = userRepository.findByEmail(email)
+            .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Email not found"));
+
+        PasswordResetOtp latestOtp = passwordResetOtpRepository.findTopByUserIdAndVerifiedFalseOrderByCreatedAtDesc(user.getId())
+            .orElseThrow(() -> new AppException(HttpStatus.BAD_REQUEST, "OTP not found. Please request a new OTP"));
+
+        if (latestOtp.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "OTP expired. Please request a new OTP");
+        }
+
+        if (latestOtp.getFailedAttempts() >= MAX_OTP_FAILED_ATTEMPTS) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "OTP has been locked due to too many failed attempts");
+        }
+
+        if (!passwordEncoder.matches(otp, latestOtp.getOtpHash())) {
+            latestOtp.setFailedAttempts(latestOtp.getFailedAttempts() + 1);
+            passwordResetOtpRepository.save(latestOtp);
+            throw new AppException(HttpStatus.BAD_REQUEST, "Invalid OTP");
+        }
+
+        String newPassword = generateRandomValue(PASSWORD_ALPHABET, GENERATED_PASSWORD_LENGTH);
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+
+        latestOtp.setVerified(true);
+        latestOtp.setVerifiedAt(LocalDateTime.now());
+        passwordResetOtpRepository.save(latestOtp);
+
+        return newPassword;
     }
 
     private AuthResponse buildAuthResponse(String accessToken, String refreshToken) {
@@ -137,6 +206,28 @@ public class AuthServiceImpl implements AuthService {
             throw new AppException(HttpStatus.UNAUTHORIZED, "Missing bearer token");
         }
         return bearerToken.substring(7);
+    }
+
+    private void sendForgotPasswordOtpMail(String toEmail, String otp) {
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(mailFrom);
+            message.setTo(toEmail);
+            message.setSubject("Ma OTP khoi phuc mat khau");
+            message.setText("Ma OTP cua ban la: " + otp + "\nMa co hieu luc trong " + OTP_EXPIRE_MINUTES + " phut.");
+            mailSender.send(message);
+        } catch (MailException ex) {
+            throw new AppException(HttpStatus.SERVICE_UNAVAILABLE, "Unable to send OTP email. Please try again later");
+        }
+    }
+
+    private static String generateRandomValue(String alphabet, int length) {
+        StringBuilder builder = new StringBuilder(length);
+        for (int i = 0; i < length; i++) {
+            int index = SECURE_RANDOM.nextInt(alphabet.length());
+            builder.append(alphabet.charAt(index));
+        }
+        return builder.toString();
     }
 }
 

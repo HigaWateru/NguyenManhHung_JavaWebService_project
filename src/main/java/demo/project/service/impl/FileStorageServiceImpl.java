@@ -1,9 +1,12 @@
 package demo.project.service.impl;
 
 import com.cloudinary.Cloudinary;
+import demo.project.dto.response.CourtImageResponse;
 import demo.project.entity.BadmintonCluster;
 import demo.project.entity.Court;
+import demo.project.entity.CourtImage;
 import demo.project.exception.AppException;
+import demo.project.repository.CourtImageRepository;
 import demo.project.repository.CourtRepository;
 import demo.project.service.FileStorageService;
 import jakarta.transaction.Transactional;
@@ -16,8 +19,9 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Set;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -29,20 +33,68 @@ public class FileStorageServiceImpl implements FileStorageService {
 
     private final Cloudinary cloudinary;
     private final CourtRepository courtRepository;
+    private final CourtImageRepository courtImageRepository;
 
     @Override
     @Transactional
-    public String uploadCourtImage(Long courtId, MultipartFile file, String username) throws IOException {
+    public CourtImageResponse addCourtImage(Long courtId, MultipartFile file, String username) throws IOException {
         validateFile(file);
 
-        Court court = courtRepository.findById(courtId).orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Court not found"));
+        Court court = findCourtById(courtId);
         validateUploadPermission(court, username);
 
         Map<?, ?> result = cloudinary.uploader().upload(file.getBytes(), Map.of());
         String imageUrl = String.valueOf(result.get("secure_url"));
-        court.setImage(imageUrl);
-        courtRepository.save(court);
-        return imageUrl;
+        String publicId = String.valueOf(result.get("public_id"));
+
+        CourtImage courtImage = courtImageRepository.save(CourtImage.builder().court(court).imageUrl(imageUrl).publicId(publicId).build());
+        return toResponse(courtImage);
+    }
+
+    @Override
+    @Transactional
+    public CourtImageResponse updateCourtImage(Long courtId, Long imageId, MultipartFile file, String username) throws IOException {
+        validateFile(file);
+
+        Court court = findCourtById(courtId);
+        validateUploadPermission(court, username);
+
+        CourtImage courtImage = courtImageRepository.findByIdAndCourtId(imageId, courtId)
+            .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Court image not found"));
+
+        Map<?, ?> result = cloudinary.uploader().upload(file.getBytes(), Map.of());
+        String imageUrl = String.valueOf(result.get("secure_url"));
+        String publicId = String.valueOf(result.get("public_id"));
+
+        String oldPublicId = courtImage.getPublicId();
+        courtImage.setImageUrl(imageUrl);
+        courtImage.setPublicId(publicId);
+
+        CourtImage savedImage = courtImageRepository.save(courtImage);
+        safeDeleteFromCloudinary(oldPublicId);
+        return toResponse(savedImage);
+    }
+
+    @Override
+    @Transactional
+    public void deleteCourtImage(Long courtId, Long imageId, String username) throws IOException {
+        Court court = findCourtById(courtId);
+        validateUploadPermission(court, username);
+
+        CourtImage courtImage = courtImageRepository.findByIdAndCourtId(imageId, courtId)
+            .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Court image not found"));
+
+        courtImageRepository.delete(courtImage);
+        safeDeleteFromCloudinary(courtImage.getPublicId());
+    }
+
+    @Override
+    @Transactional
+    public List<CourtImageResponse> getCourtImages(Long courtId, String username) {
+        Court court = findCourtById(courtId);
+        validateUploadPermission(court, username);
+
+        return courtImageRepository.findByCourtId(courtId).stream().map(FileStorageServiceImpl::toResponse).toList();
     }
 
     private static void validateFile(MultipartFile file) throws IOException {
@@ -73,7 +125,28 @@ public class FileStorageServiceImpl implements FileStorageService {
         String managerUsername = cluster == null || cluster.getManager() == null ? null : cluster.getManager().getUsername();
 
         if (managerUsername == null || !managerUsername.equals(username)) {
-            throw new AppException(HttpStatus.FORBIDDEN, "You are not allowed to upload image for this court");
+            throw new AppException(HttpStatus.FORBIDDEN, "You are not allowed to manage images for this court");
+        }
+    }
+
+    private static CourtImageResponse toResponse(CourtImage image) {
+        return CourtImageResponse.builder().id(image.getId()).courtId(image.getCourt().getId()).secureUrl(image.getImageUrl())
+            .createdAt(image.getCreatedAt()).updatedAt(image.getUpdatedAt()).build();
+    }
+
+    private Court findCourtById(Long courtId) {
+        return courtRepository.findById(courtId).orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Court not found"));
+    }
+
+    private void safeDeleteFromCloudinary(String publicId) {
+        if (publicId == null || publicId.isBlank()) {
+            return;
+        }
+
+        try {
+            cloudinary.uploader().destroy(publicId, Map.of());
+        } catch (Exception ignored) {
+            // Keep DB state consistent even if cloud cleanup fails unexpectedly.
         }
     }
 }
