@@ -1,115 +1,78 @@
-# Mẫu test API (method, body, authentication, token)
+# Mẫu test API trên Postman + kiểm tra report unit test
 
-Tài liệu này tổng hợp các mẫu test nhanh cho những chức năng hiện có trong dự án.
+Tài liệu này bám theo dữ liệu seed mới tại `src/main/java/demo/project/seeder/DevDataSeeder.java` và các controller hiện có trong dự án.
 
-## 1) Chuẩn bị biến môi trường
+## 1) Chuẩn bị Postman environment
 
-```bash
-BASE_URL=http://localhost:8080
-ADMIN_USERNAME=admin
-MANAGER_USERNAME=manager.a
-CUSTOMER_USERNAME=customer.a
-PASSWORD=123456
-```
+Tạo environment và thêm các biến sau:
+
+- `BASE_URL = http://localhost:8080`
+- `ADMIN_USERNAME = admin.root`
+- `ADMIN_PASSWORD = Adm1nRoot@2026`
+- `MANAGER_USERNAME = manager.a`
+- `MANAGER_PASSWORD = MngA@2026!`
+- `CUSTOMER_USERNAME = customer.a`
+- `CUSTOMER_PASSWORD = CusA@2026#`
+- `ADMIN_ACCESS_TOKEN =` (để trống ban đầu)
+- `MANAGER_ACCESS_TOKEN =` (để trống ban đầu)
+- `CUSTOMER_ACCESS_TOKEN =` (để trống ban đầu)
+- `REFRESH_TOKEN =` (để trống ban đầu)
 
 > Lưu ý:
-> - Password seed theo `DATA_SEED.md` là `123456`.
-> - API dưới `/api/v1/auth/**` không cần bearer token (trừ `change-password`, `logout`).
-> - API dưới `/api/v1/admin/**`, `/api/v1/manager/**`, `/api/v1/customer/**` cần JWT access token.
+> - Không còn seed password chung `123456`.
+> - API dưới `/api/v1/admin/**`, `/api/v1/manager/**`, `/api/v1/customer/**`, `/api/v1/files/**` cần bearer token đúng role.
 
-## 2) Luồng lấy token (Auth)
+## 2) Bộ tài khoản seed để test nhanh
 
-### 2.1 Login admin để lấy access token + refresh token
+| Role | Username | Password |
+|---|---|---|
+| Admin | `admin.root` | `Adm1nRoot@2026` |
+| Manager | `manager.a` | `MngA@2026!` |
+| Customer | `customer.a` | `CusA@2026#` |
+
+Tham khảo đầy đủ danh sách account tại `docx/DATA_SEED.md`.
+
+## 3) Luồng Auth cơ bản (lấy token)
+
+### 3.1 Login (dùng cho admin/manager/customer)
 
 - Method: `POST`
-- URL: `/api/v1/auth/login`
+- URL: `{{BASE_URL}}/api/v1/auth/login`
 - Authentication: `None`
 
 ```json
 {
-  "username": "admin",
-  "password": "123456"
+  "username": "{{ADMIN_USERNAME}}",
+  "password": "{{ADMIN_PASSWORD}}"
 }
 ```
 
-### 2.2 Login manager
+Sau khi gọi thành công, copy `data.accessToken` và `data.refreshToken` vào biến môi trường tương ứng.
+
+### 3.2 Refresh token
 
 - Method: `POST`
-- URL: `/api/v1/auth/login`
-- Authentication: `None`
+- URL: `{{BASE_URL}}/api/v1/auth/refresh`
 
 ```json
 {
-  "username": "manager.a",
-  "password": "123456"
+  "refreshToken": "{{REFRESH_TOKEN}}"
 }
 ```
 
-### 2.3 Login customer
+### 3.3 Logout (đang dùng Redis blacklist)
 
 - Method: `POST`
-- URL: `/api/v1/auth/login`
-- Authentication: `None`
+- URL: `{{BASE_URL}}/api/v1/auth/logout`
+- Header: `Authorization: Bearer {{ADMIN_ACCESS_TOKEN}}`
 
-```json
-{
-  "username": "customer.a",
-  "password": "123456"
-}
-```
+Kỳ vọng: logout thành công, token cũ bị thu hồi ngay.
 
-### 2.4 Refresh token
+### 3.4 Forgot password + verify OTP
 
-- Method: `POST`
-- URL: `/api/v1/auth/refresh`
-- Authentication: `None`
+1) Gửi OTP:
 
-```json
-{
-  "refreshToken": "<REFRESH_TOKEN>"
-}
-```
-
-### 2.5 Logout
-
-- Method: `POST`
-- URL: `/api/v1/auth/logout`
-- Authentication header: `Authorization: Bearer <ACCESS_TOKEN>`
-- Body: `None`
-
-### 2.6 Change password
-
-- Method: `POST`
-- URL: `/api/v1/auth/change-password`
-- Authentication header: `Authorization: Bearer <ACCESS_TOKEN>`
-
-```json
-{
-  "oldPassword": "123456",
-  "newPassword": "1234567"
-}
-```
-
-### 2.7 Register
-
-- Method: `POST`
-- URL: `/api/v1/auth/register`
-- Authentication: `None`
-
-```json
-{
-  "username": "new.customer",
-  "email": "new.customer@example.com",
-  "password": "123456",
-  "role": "ROLE_CUSTOMER"
-}
-```
-
-### 2.8 Forgot password (gửi OTP về email)
-
-- Method: `POST`
-- URL: `/api/v1/auth/forgot-password`
-- Authentication: `None`
+- `POST {{BASE_URL}}/api/v1/auth/forgot-password`
 
 ```json
 {
@@ -117,11 +80,9 @@ PASSWORD=123456
 }
 ```
 
-### 2.9 Verify OTP để nhận mật khẩu mới
+2) Verify OTP:
 
-- Method: `POST`
-- URL: `/api/v1/auth/forgot-password/verify-otp`
-- Authentication: `None`
+- `POST {{BASE_URL}}/api/v1/auth/forgot-password/verify-otp`
 
 ```json
 {
@@ -130,92 +91,86 @@ PASSWORD=123456
 }
 ```
 
-> Kết quả thành công trả về `data` là mật khẩu mới tạm thời. Nên đăng nhập và đổi mật khẩu ngay.
+Kỳ vọng: `data` trả về mật khẩu tạm `123456`.
 
-## 3) Test nhóm Admin User API
+## 4) Test Admin User API
 
-Sử dụng token của admin (`Authorization: Bearer <ADMIN_ACCESS_TOKEN>`).
+Header chung: `Authorization: Bearer {{ADMIN_ACCESS_TOKEN}}`
 
-### 3.1 Search users
+### 4.1 Search users
 
 - Method: `GET`
-- URL: `/api/v1/admin/users?keyword=manager&page=0&size=10`
-- Body: `None`
+- URL: `{{BASE_URL}}/api/v1/admin/users?keyword=manager&page=0&size=10`
 
-### 3.2 Create user
+### 4.2 Create user
 
 - Method: `POST`
-- URL: `/api/v1/admin/users`
+- URL: `{{BASE_URL}}/api/v1/admin/users`
 
 ```json
 {
   "username": "staff.test",
   "email": "staff.test@example.com",
-  "password": "123456",
+  "password": "StaffTest@2026",
   "role": "ROLE_MANAGER",
   "enabled": true
 }
 ```
 
-### 3.3 Update user
+### 4.3 Update user
 
 - Method: `PUT`
-- URL: `/api/v1/admin/users/{id}`
+- URL: `{{BASE_URL}}/api/v1/admin/users/{id}`
 
 ```json
 {
   "username": "staff.test.updated",
   "email": "staff.updated@example.com",
-  "password": "654321",
+  "password": "StaffUpdated@2026",
   "role": "ROLE_MANAGER",
   "enabled": true
 }
 ```
 
-### 3.4 Delete user
+### 4.4 Delete user
 
 - Method: `DELETE`
-- URL: `/api/v1/admin/users/{id}`
-- Body: `None`
+- URL: `{{BASE_URL}}/api/v1/admin/users/{id}`
 
-## 4) Test nhóm Customer Booking API
+## 5) Test Booking API theo role
 
-Sử dụng token của customer (`Authorization: Bearer <CUSTOMER_ACCESS_TOKEN>`).
+### 5.1 Customer tạo booking
 
-### 4.1 Tạo booking
-
+- Header: `Authorization: Bearer {{CUSTOMER_ACCESS_TOKEN}}`
 - Method: `POST`
-- URL: `/api/v1/customer/bookings`
+- URL: `{{BASE_URL}}/api/v1/customer/bookings`
 
 ```json
 {
   "courtId": 1,
-  "timeSlot": "07:00-09:00",
-  "bookingDate": "2026-06-12",
+  "timeSlot": "07:00-08:30",
+  "bookingDate": "2026-06-20",
   "totalPrice": 200000
 }
 ```
 
-### 4.2 Lấy booking của tôi
+### 5.2 Customer xem booking của mình
 
+- Header: `Authorization: Bearer {{CUSTOMER_ACCESS_TOKEN}}`
 - Method: `GET`
-- URL: `/api/v1/customer/bookings`
-- Body: `None`
+- URL: `{{BASE_URL}}/api/v1/customer/bookings`
 
-## 5) Test nhóm Manager Booking API (duyệt/từ chối sân thuộc manager)
+### 5.3 Manager lọc booking trong phạm vi cụm sân quản lý
 
-Sử dụng token manager (`Authorization: Bearer <MANAGER_ACCESS_TOKEN>`).
-
-### 5.1 Lọc booking theo ngày + trạng thái trong phạm vi manager
-
+- Header: `Authorization: Bearer {{MANAGER_ACCESS_TOKEN}}`
 - Method: `GET`
-- URL: `/api/v1/manager/bookings?date=2026-06-12&status=PENDING`
-- Body: `None`
+- URL: `{{BASE_URL}}/api/v1/manager/bookings?date=2026-06-20&status=PENDING`
 
-### 5.2 Manager duyệt booking
+### 5.4 Manager duyệt/hủy booking
 
+- Header: `Authorization: Bearer {{MANAGER_ACCESS_TOKEN}}`
 - Method: `PATCH`
-- URL: `/api/v1/manager/bookings/{bookingId}/status`
+- URL: `{{BASE_URL}}/api/v1/manager/bookings/{bookingId}/status`
 
 ```json
 {
@@ -223,10 +178,11 @@ Sử dụng token manager (`Authorization: Bearer <MANAGER_ACCESS_TOKEN>`).
 }
 ```
 
-### 5.3 Manager từ chối booking
+### 5.5 Admin duyệt/hủy booking toàn hệ thống
 
+- Header: `Authorization: Bearer {{ADMIN_ACCESS_TOKEN}}`
 - Method: `PATCH`
-- URL: `/api/v1/manager/bookings/{bookingId}/status`
+- URL: `{{BASE_URL}}/api/v1/admin/bookings/{bookingId}/status`
 
 ```json
 {
@@ -234,87 +190,45 @@ Sử dụng token manager (`Authorization: Bearer <MANAGER_ACCESS_TOKEN>`).
 }
 ```
 
-## 6) Test nhóm Admin Booking API (duyệt/từ chối toàn hệ thống)
+## 6) Test File API (manager)
 
-Sử dụng token admin (`Authorization: Bearer <ADMIN_ACCESS_TOKEN>`).
+Header chung: `Authorization: Bearer {{MANAGER_ACCESS_TOKEN}}`
 
-### 6.1 Lọc booking theo ngày + trạng thái toàn hệ thống
+- `POST {{BASE_URL}}/api/v1/files/courts/{courtId}/images` (form-data: `file`)
+- `GET {{BASE_URL}}/api/v1/files/courts/{courtId}/images`
+- `PUT {{BASE_URL}}/api/v1/files/courts/{courtId}/images/{imageId}` (form-data: `file`)
+- `DELETE {{BASE_URL}}/api/v1/files/courts/{courtId}/images/{imageId}`
 
-- Method: `GET`
-- URL: `/api/v1/admin/bookings?date=2026-06-12&status=PENDING`
-- Body: `None`
+## 7) Negative test gợi ý
 
-### 6.2 Admin duyệt booking
+1. Login sai password -> `401`.
+2. Dùng token customer gọi `/api/v1/admin/users` -> `403`.
+3. Duyệt booking với `status=COMPLETED` -> `400`.
+4. Duyệt booking không tồn tại -> `404`.
+5. Tạo booking trùng khung giờ -> `409`.
+6. Gọi file API bằng token customer -> `403`.
 
-- Method: `PATCH`
-- URL: `/api/v1/admin/bookings/{bookingId}/status`
+## 8) Cách kiểm tra report unit test trong dự án
 
-```json
-{
-  "status": "CONFIRMED"
-}
+### 8.1 Chạy test + tạo report
+
+```powershell
+Set-Location "D:\code\Rest API\project"
+.\gradlew.bat clean test jacocoTestReport
 ```
 
-### 6.3 Admin từ chối booking
+### 8.2 Xem kết quả test JUnit
 
-- Method: `PATCH`
-- URL: `/api/v1/admin/bookings/{bookingId}/status`
+- Mở file: `build/reports/tests/test/index.html`
 
-```json
-{
-  "status": "CANCELLED"
-}
-```
+### 8.3 Xem độ bao phủ JaCoCo
 
-## 7) Test nhóm Manager Court Image API (1 sân nhiều ảnh)
+- Mở file: `build/reports/jacoco/test/html/index.html`
 
-Sử dụng token manager (`Authorization: Bearer <MANAGER_ACCESS_TOKEN>`).
+### 8.4 Bộ test hiện có liên quan controller/service
 
-### 7.1 Thêm ảnh mới cho sân
-
-- Method: `POST`
-- URL: `/api/v1/files/courts/{courtId}/images`
-- Body type: `form-data`
-- Field:
-  - `file` (type `File`)
-
-### 7.2 Lấy danh sách ảnh của sân
-
-- Method: `GET`
-- URL: `/api/v1/files/courts/{courtId}/images`
-- Body: `None`
-
-### 7.3 Cập nhật ảnh theo imageId
-
-- Method: `PUT`
-- URL: `/api/v1/files/courts/{courtId}/images/{imageId}`
-- Body type: `form-data`
-- Field:
-  - `file` (type `File`)
-
-### 7.4 Xóa ảnh theo imageId
-
-- Method: `DELETE`
-- URL: `/api/v1/files/courts/{courtId}/images/{imageId}`
-- Body: `None`
-
-## 8) Mẫu negative test nên có
-
-1. Login sai password -> mong đợi `401`.
-2. Gọi API admin bằng token customer -> mong đợi `403`.
-3. Duyệt booking với `status = COMPLETED` -> mong đợi `400 Invalid status`.
-4. Duyệt booking không tồn tại -> mong đợi `404 Booking not found`.
-5. Manager duyệt booking không thuộc cụm sân mình quản lý -> mong đợi `403`.
-6. Duyệt lại booking đã `CONFIRMED`/`CANCELLED` -> mong đợi `409`.
-7. Tạo booking trùng khung giờ -> mong đợi `409 Booking already exists`.
-8. Upload ảnh với token customer -> mong đợi `403`.
-9. Manager A sửa/xóa ảnh của sân thuộc manager B -> mong đợi `403`.
-10. Sửa/xóa `imageId` không thuộc `courtId` -> mong đợi `404 Court image not found`.
-
-## 9) Hướng dẫn trích token khi test Postman
-
-1. Gọi `POST /api/v1/auth/login`.
-2. Copy `data.accessToken` gắn vào header `Authorization: Bearer <token>`.
-3. Copy `data.refreshToken` để test endpoint refresh.
-4. Sau khi gọi logout, token đó bị blacklist và không dùng lại được.
+- `src/test/java/demo/project/controller/AdminUserControllerTest.java` (5 test)
+- `src/test/java/demo/project/service/impl/UserServiceImplTest.java` (5 test)
+- `src/test/java/demo/project/service/impl/AuthServiceImplForgotPasswordTest.java`
+- `src/test/java/demo/project/service/impl/FileStorageServiceImplTest.java`
 

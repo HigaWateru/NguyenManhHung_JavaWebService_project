@@ -21,14 +21,14 @@ public class AdminBookingController {
 
     @PatchMapping("/{bookingId}/status")
     public ResponseEntity<ApiResponse<BookingResponse>> updateStatus(@PathVariable Long bookingId,
-                                                                     @Valid @RequestBody BookingApprovalRequest request) {
+            @Valid @RequestBody BookingApprovalRequest request) {
         BookingResponse response = bookingService.updateStatusByAdmin(bookingId, request.getStatus());
         return ResponseEntity.ok(ApiResponse.success("Updated successfully", response));
     }
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<BookingResponse>>> byDateAndStatus(@RequestParam LocalDate date,
-                                                                               @RequestParam BookingStatus status) {
+            @RequestParam BookingStatus status) {
         return ResponseEntity.ok(ApiResponse.success("Fetched successfully",
             bookingService.getBookingByDateAndStatus(date, status)));
     }

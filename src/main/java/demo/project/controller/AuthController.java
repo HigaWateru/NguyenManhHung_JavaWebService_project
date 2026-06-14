@@ -46,7 +46,7 @@ public class AuthController {
 
     @PostMapping("/change-password")
     public ResponseEntity<ApiResponse<Void>> changePassword(Authentication authentication,
-                                                            @Valid @RequestBody ChangePasswordRequest request) {
+            @Valid @RequestBody ChangePasswordRequest request) {
         authService.changePassword(authentication.getName(), request);
         return ResponseEntity.ok(ApiResponse.success("Password changed", null));
     }
@@ -60,7 +60,7 @@ public class AuthController {
     @PostMapping("/forgot-password/verify-otp")
     public ResponseEntity<ApiResponse<String>> verifyForgotPasswordOtp(@Valid @RequestBody VerifyForgotPasswordOtpRequest request) {
         String newPassword = authService.verifyForgotPasswordOtp(request.getEmail(), request.getOtp());
-        return ResponseEntity.ok(ApiResponse.success("OTP verified, new password generated", newPassword));
+        return ResponseEntity.ok(ApiResponse.success("OTP verified, temporary password has been set", newPassword));
     }
 }
 

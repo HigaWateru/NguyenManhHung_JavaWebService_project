@@ -10,10 +10,13 @@ import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -24,7 +27,7 @@ public class JwtService {
         Instant now = Instant.now();
         Instant expiration = now.plus(jwtProperties.getAccessTokenMinutes(), ChronoUnit.MINUTES);
 
-        return Jwts.builder().subject(username).claims(Map.of("role", role.name())).issuedAt(Date.from(now))
+        return Jwts.builder().id(UUID.randomUUID().toString()).subject(username).claims(Map.of("role", role.name())).issuedAt(Date.from(now))
             .expiration(Date.from(expiration)).signWith(getSigningKey()).compact();
     }
 
@@ -53,6 +56,14 @@ public class JwtService {
         return Math.max(seconds, 0);
     }
 
+    public String resolveTokenId(String token) {
+        String jti = extractAllClaims(token).getId();
+        if (jti != null && !jti.isBlank()) {
+            return jti;
+        }
+        return sha256Hex(token);
+    }
+
     public boolean isTokenValid(String token, String username) {
         String tokenUsername = extractUsername(token);
         return tokenUsername.equals(username) && extractExpiration(token).isAfter(Instant.now());
@@ -73,6 +84,20 @@ public class JwtService {
                 // Fall back to using the configured secret as plain text.
                 return secret.getBytes(StandardCharsets.UTF_8);
             }
+        }
+    }
+
+    private String sha256Hex(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+            StringBuilder builder = new StringBuilder(hash.length * 2);
+            for (byte b : hash) {
+                builder.append(String.format("%02x", b));
+            }
+            return builder.toString();
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 is not available", ex);
         }
     }
 }

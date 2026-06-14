@@ -1,6 +1,5 @@
 package demo.project.security.jwt;
 
-import demo.project.repository.TokenBlacklistRepository;
 import demo.project.security.principal.CustomUserDetailsService;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
@@ -23,7 +22,7 @@ import java.io.IOException;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
     private final CustomUserDetailsService userDetailsService;
-    private final TokenBlacklistRepository tokenBlacklistRepository;
+    private final RedisTokenBlacklistService redisTokenBlacklistService;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -35,12 +34,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         String token = header.substring(7);
-        if (tokenBlacklistRepository.existsByToken(token)) {
-            response.sendError(HttpStatus.FORBIDDEN.value(), "Token has been revoked");
-            return;
-        }
 
         try {
+            if (redisTokenBlacklistService.isAccessTokenBlacklisted(token)) {
+                response.sendError(HttpStatus.FORBIDDEN.value(), "Token has been revoked");
+                return;
+            }
+
             String username = jwtService.extractUsername(token);
             if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 UserDetails userDetails = userDetailsService.loadUserByUsername(username);

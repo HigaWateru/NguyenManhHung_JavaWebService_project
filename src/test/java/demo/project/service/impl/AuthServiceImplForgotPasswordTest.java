@@ -5,9 +5,9 @@ import demo.project.entity.User;
 import demo.project.exception.AppException;
 import demo.project.repository.PasswordResetOtpRepository;
 import demo.project.repository.RefreshTokenRepository;
-import demo.project.repository.TokenBlacklistRepository;
 import demo.project.repository.UserRepository;
 import demo.project.security.jwt.JwtProperties;
+import demo.project.security.jwt.RedisTokenBlacklistService;
 import demo.project.security.jwt.JwtService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,7 +34,6 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceImplForgotPasswordTest {
-
     @Mock
     private AuthenticationManager authenticationManager;
 
@@ -54,7 +53,7 @@ class AuthServiceImplForgotPasswordTest {
     private RefreshTokenRepository refreshTokenRepository;
 
     @Mock
-    private TokenBlacklistRepository tokenBlacklistRepository;
+    private RedisTokenBlacklistService redisTokenBlacklistService;
 
     @Mock
     private PasswordEncoder passwordEncoder;
@@ -99,7 +98,7 @@ class AuthServiceImplForgotPasswordTest {
 
         String newPassword = authService.verifyForgotPasswordOtp("valid@test.local", "123456");
 
-        assertNotNull(newPassword);
+        assertEquals("123456", newPassword);
         verify(userRepository).save(user);
         verify(passwordResetOtpRepository, times(1)).save(otpEntity);
         assertTrue(otpEntity.isVerified());

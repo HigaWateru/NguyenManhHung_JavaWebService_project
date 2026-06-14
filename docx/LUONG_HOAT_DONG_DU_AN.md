@@ -41,7 +41,7 @@ Mọi request API đi theo luồng cơ bản:
 2. `JwtAuthenticationFilter` chạy trước `UsernamePasswordAuthenticationFilter`:
    - Nếu không có `Authorization: Bearer ...` -> cho đi tiếp (chưa authenticate).
    - Nếu có token:
-     - Kiểm tra token có nằm trong `token_blacklist` không.
+      - Kiểm tra token có nằm trong Redis blacklist không (`bl:access:<jti-hoặc-token-hash>`).
      - Parse JWT, lấy `username`, kiểm tra hạn token.
      - Nạp user qua `CustomUserDetailsService`.
      - Nếu hợp lệ, set `Authentication` vào `SecurityContextHolder`.
@@ -91,12 +91,17 @@ Luồng:
 Luồng:
 
 1. Tách token từ header, nếu thiếu/không đúng format -> lỗi 401.
-2. Lưu token vào bảng `token_blacklist` kèm `expiryTime`.
-3. Trích `username` từ access token.
-4. Nếu tìm thấy user, xóa refresh token của user đó.
-5. Xóa `SecurityContextHolder`.
+2. Tính thời gian sống còn lại (`TTL`) của access token.
+3. Ghi key blacklist vào Redis với TTL tương ứng:
+   - Key: `bl:access:<jti-hoặc-token-hash>`
+   - Value: `1`
+   - TTL: bằng thời gian còn lại của token.
+4. Nếu token đã hết hạn thì bỏ qua bước ghi blacklist.
+5. Trích `username` từ access token.
+6. Nếu tìm thấy user, xóa refresh token của user đó.
+7. Xóa `SecurityContextHolder`.
 
-Kết quả: access token hiện tại bị vô hiệu hóa bởi blacklist, refresh token cũng bị thu hồi.
+Kết quả: access token hiện tại bị vô hiệu hóa ngay qua Redis blacklist, refresh token cũng bị thu hồi.
 
 ### 4.4) Register - `POST /api/v1/auth/register`
 
@@ -125,13 +130,15 @@ Luồng:
 
 Luồng hiện tại:
 
-1. Chỉ kiểm tra email có tồn tại hay không.
-2. Nếu không có email -> lỗi 404.
-3. Chưa có bước gửi email/reset token trong code hiện tại.
+1. Kiểm tra email có tồn tại hay không.
+2. Xóa OTP cũ của user và dọn OTP đã hết hạn.
+3. Sinh OTP 6 chữ số, hash OTP rồi lưu DB với thời hạn 5 phút.
+4. Gửi OTP qua email bằng Gmail SMTP.
+5. Khi gọi `POST /api/v1/auth/forgot-password/verify-otp`, hệ thống xác thực OTP, đặt mật khẩu tạm mặc định `123456`, rồi trả mật khẩu này cho client.
 
 ## 5) Luồng quản lý user cho admin (`/api/v1/admin/users`)
 
-> Lưu ý: hiện chưa có rule phân quyền theo role trong `SecurityConfig`; endpoint này chỉ yêu cầu authenticated, chưa ép bắt buộc `ROLE_ADMIN`.
+> Lưu ý: trong `SecurityConfig`, nhóm endpoint `/api/v1/admin/**` đã được cấu hình `hasRole("ADMIN")`. Vì vậy các API `/api/v1/admin/users` bắt buộc người dùng có `ROLE_ADMIN` mới truy cập được.
 
 ### 5.1) Search users - `GET /api/v1/admin/users`
 
@@ -201,8 +208,9 @@ Luồng:
 
 ### Blacklist token
 
-- Khi logout, access token được ghi vào `token_blacklist`.
-- Filter từ chối request nếu token nằm trong blacklist.
+- Khi logout, access token được ghi vào Redis với key `bl:access:<jti-hoặc-token-hash>`.
+- Redis tự xóa key khi hết TTL, không cần dọn thủ công như blacklist trong DB.
+- Filter từ chối request nếu key blacklist còn tồn tại.
 
 ## 8) Luồng seed dữ liệu dev
 
@@ -233,11 +241,24 @@ Quan hệ chính giữa các entity:
 
 Dữ liệu booking có `@PrePersist` để tự gán `createdAt` khi insert.
 
-## 10) Các luồng nghiệp vụ đã chuẩn bị model nhưng chưa mở endpoint
+## 10) Luồng đặt sân đã được mở endpoint
 
-Trong code đã có DTO/repository liên quan booking (`BookingCreateRequest`, `BookingApprovalRequest`, `BookingRepository`), nhưng hiện chưa thấy controller/service booking tương ứng trong `src/main/java/demo/project/controller` và `src/main/java/demo/project/service`.
+Luồng booking hiện đã được triển khai đầy đủ từ controller -> service -> repository:
 
-Điều này cho thấy dự án đã có nền dữ liệu cho luồng đặt sân, nhưng API luồng này chưa được expose trong bản hiện tại.
+- Controller:
+  - `CustomerBookingController` (`/api/v1/customer/bookings`)
+  - `ManagerBookingController` (`/api/v1/manager/bookings`)
+  - `AdminBookingController` (`/api/v1/admin/bookings`)
+- Service: `BookingService`, `BookingServiceImpl`
+- Repository: `BookingRepository`
+
+Nghiệp vụ chính đang có:
+
+1. Customer tạo booking theo sân/ngày/khung giờ.
+2. Hệ thống kiểm tra trùng khung giờ với các booking đang `PENDING` hoặc `CONFIRMED`.
+3. Booking mới được tạo ở trạng thái `PENDING`.
+4. Manager của cụm sân hoặc Admin có thể cập nhật trạng thái booking (`CONFIRMED`/`CANCELLED`).
+5. Có API lọc booking theo ngày + trạng thái cho Manager/Admin.
 
 ## 11) Tóm tắt ngắn các entrypoint API hiện tại
 
@@ -247,6 +268,13 @@ Trong code đã có DTO/repository liên quan booking (`BookingCreateRequest`, `
 - `POST /api/v1/auth/register`
 - `POST /api/v1/auth/change-password`
 - `POST /api/v1/auth/forgot-password`
+- `POST /api/v1/auth/forgot-password/verify-otp`
+- `POST /api/v1/customer/bookings`
+- `GET /api/v1/customer/bookings`
+- `PATCH /api/v1/manager/bookings/{bookingId}/status`
+- `GET /api/v1/manager/bookings`
+- `PATCH /api/v1/admin/bookings/{bookingId}/status`
+- `GET /api/v1/admin/bookings`
 - `GET /api/v1/admin/users`
 - `POST /api/v1/admin/users`
 - `PUT /api/v1/admin/users/{id}`

@@ -72,7 +72,7 @@ Hệ thống gửi OTP bằng `JavaMailSender` với cấu hình trong `applicat
 2. Hệ thống lấy OTP mới nhất chưa xác thực của user.
 3. Kiểm tra OTP còn hạn và chưa vượt số lần nhập sai.
 4. So khớp OTP nhập vào với `otp_hash`.
-5. Nếu đúng, hệ thống sinh mật khẩu mới ngẫu nhiên.
+5. Nếu đúng, hệ thống đặt mật khẩu mới mặc định là `123456`.
 6. Mật khẩu mới được mã hóa bằng `PasswordEncoder` và cập nhật vào tài khoản user.
 7. Đánh dấu OTP đã xác thực và trả về mật khẩu mới trong response.
 
@@ -82,7 +82,7 @@ Hệ thống gửi OTP bằng `JavaMailSender` với cấu hình trong `applicat
 - OTP hết hạn sau 5 phút.
 - Giới hạn tối đa 5 lần nhập sai OTP cho 1 mã.
 - OTP lưu dưới dạng hash (`otp_hash`), không lưu plain text trong DB.
-- Mật khẩu trả về là mật khẩu tạm, người dùng nên đổi ngay sau khi đăng nhập.
+- Mật khẩu trả về là mật khẩu tạm mặc định `123456`, người dùng nên đổi ngay sau khi đăng nhập.
 
 ## 6) Các lỗi thường gặp
 
@@ -107,8 +107,8 @@ Hệ thống gửi OTP bằng `JavaMailSender` với cấu hình trong `applicat
 ```json
 {
   "success": true,
-  "message": "OTP verified, new password generated",
-  "data": "Ab9@x2Pq7L"
+  "message": "OTP verified, temporary password has been set",
+  "data": "123456"
 }
 ```
 

@@ -8,14 +8,13 @@ import demo.project.dto.response.AuthResponse;
 import demo.project.dto.response.UserResponse;
 import demo.project.entity.PasswordResetOtp;
 import demo.project.entity.RefreshToken;
-import demo.project.entity.TokenBlacklist;
 import demo.project.entity.User;
 import demo.project.exception.AppException;
 import demo.project.repository.PasswordResetOtpRepository;
 import demo.project.repository.RefreshTokenRepository;
-import demo.project.repository.TokenBlacklistRepository;
 import demo.project.repository.UserRepository;
 import demo.project.security.jwt.JwtProperties;
+import demo.project.security.jwt.RedisTokenBlacklistService;
 import demo.project.security.jwt.JwtService;
 import demo.project.service.AuthService;
 import lombok.RequiredArgsConstructor;
@@ -42,10 +41,9 @@ public class AuthServiceImpl implements AuthService {
     private static final int OTP_LENGTH = 6;
     private static final long OTP_EXPIRE_MINUTES = 5;
     private static final int MAX_OTP_FAILED_ATTEMPTS = 5;
-    private static final int GENERATED_PASSWORD_LENGTH = 10;
+    private static final String DEFAULT_RESET_PASSWORD = "123456";
 
     private static final String OTP_ALPHABET = "0123456789";
-    private static final String PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@#$%";
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
@@ -55,7 +53,7 @@ public class AuthServiceImpl implements AuthService {
     private final UserRepository userRepository;
     private final PasswordResetOtpRepository passwordResetOtpRepository;
     private final RefreshTokenRepository refreshTokenRepository;
-    private final TokenBlacklistRepository tokenBlacklistRepository;
+    private final RedisTokenBlacklistService redisTokenBlacklistService;
     private final PasswordEncoder passwordEncoder;
     private final JavaMailSender mailSender;
 
@@ -99,9 +97,7 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public void logout(String bearerToken) {
         String token = extractToken(bearerToken);
-        tokenBlacklistRepository.save(TokenBlacklist.builder().token(token)
-            .expiryTime(LocalDateTime.ofInstant(jwtService.extractExpiration(token), ZoneOffset.UTC))
-            .build());
+        redisTokenBlacklistService.blacklistAccessToken(token);
 
         String username = jwtService.extractUsername(token);
         userRepository.findByUsername(username)
@@ -184,15 +180,14 @@ public class AuthServiceImpl implements AuthService {
             throw new AppException(HttpStatus.BAD_REQUEST, "Invalid OTP");
         }
 
-        String newPassword = generateRandomValue(PASSWORD_ALPHABET, GENERATED_PASSWORD_LENGTH);
-        user.setPassword(passwordEncoder.encode(newPassword));
+        user.setPassword(passwordEncoder.encode(DEFAULT_RESET_PASSWORD));
         userRepository.save(user);
 
         latestOtp.setVerified(true);
         latestOtp.setVerifiedAt(LocalDateTime.now());
         passwordResetOtpRepository.save(latestOtp);
 
-        return newPassword;
+        return DEFAULT_RESET_PASSWORD;
     }
 
     private AuthResponse buildAuthResponse(String accessToken, String refreshToken) {
