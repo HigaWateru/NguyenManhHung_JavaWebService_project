@@ -302,7 +302,6 @@ Quan hệ chính giữa các entity:
 - `Court` 1-n `Booking`
 - `BadmintonCluster` 1-n `Court`
 - `User` 1-1 `BadmintonCluster` (manager)
-- `User` n-1 `TokenBlacklist`
 - `RefreshToken` n-1 `User`
 
 Dữ liệu booking có `@PrePersist` để tự gán `createdAt` khi insert.
@@ -349,3 +348,13 @@ Nghiệp vụ chính đang có:
 ---
 
 Nếu cần, có thể tách tài liệu này thành 3 file riêng: **luồng auth**, **luồng admin user**, **luồng dữ liệu booking/cluster** để dễ bảo trì theo từng module.
+
+## 12) Ghi chú thay đổi (2026-06-15)
+
+- `TokenBlacklist` đã được chuẩn hóa theo hướng Redis:
+  - Bỏ annotation JPA (`@Entity`, `@GeneratedValue`, quan hệ `@ManyToOne` với `User`).
+  - Dùng `@RedisHash("tokenBlacklist")`, `@Id` kiểu `String tokenId`, và `@TimeToLive Long ttlSeconds`.
+- `User` đã bỏ danh sách `blacklistedTokens` vì blacklist không còn lưu ở bảng quan hệ SQL.
+- `JwtAuthenticationFilter` chuyển sang check blacklist qua `RedisTokenBlacklistService.isAccessTokenBlacklisted(token)`.
+- `TokenBlacklistRepository` đổi sang `CrudRepository<TokenBlacklist, String>` và bỏ các method query theo kiểu JPA cũ.
+

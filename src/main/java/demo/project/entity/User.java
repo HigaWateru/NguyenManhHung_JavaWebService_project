@@ -43,9 +43,6 @@ public class User {
     @Builder.Default
     private List<Booking> bookings = new ArrayList<>();
 
-    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
-    @Builder.Default
-    private List<TokenBlacklist> blacklistedTokens = new ArrayList<>();
 
     @OneToOne(mappedBy = "manager", fetch = FetchType.LAZY)
     private BadmintonCluster managedCluster;
