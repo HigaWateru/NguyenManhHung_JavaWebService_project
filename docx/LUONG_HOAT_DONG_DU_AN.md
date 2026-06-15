@@ -212,6 +212,72 @@ Luồng:
 - Redis tự xóa key khi hết TTL, không cần dọn thủ công như blacklist trong DB.
 - Filter từ chối request nếu key blacklist còn tồn tại.
 
+### Luồng Redis blacklist chi tiết (access token)
+
+#### Thành phần tham gia
+
+- `AuthServiceImpl.logout(...)`: nhận access token từ header Bearer khi user logout.
+- `RedisTokenBlacklistService`: ghi/check key blacklist trong Redis.
+- `JwtService`:
+  - `resolveTokenId(token)`: lấy `jti` trong JWT; nếu không có thì fallback sang `SHA-256(token)`.
+  - `getRemainingSeconds(token)`: tính TTL còn lại của token tại thời điểm logout.
+- `JwtAuthenticationFilter`: chạy mỗi request có Bearer token để chặn token đã revoke.
+
+#### Luồng 1 - User logout
+
+```text
+Client gọi POST /api/v1/auth/logout (Bearer access_token)
+        |
+        v
+AuthServiceImpl.logout()
+        |
+        +-- JwtService.getRemainingSeconds(token) -> remainingSeconds
+        |      |
+        |      +-- nếu <= 0: token đã hết hạn, bỏ qua ghi Redis
+        |
+        +-- JwtService.resolveTokenId(token) -> tokenId (jti hoặc hash)
+        |
+        +-- Redis SET bl:access:<tokenId> = "1" EX <remainingSeconds>
+        |
+        +-- xóa refresh token trong DB + clear SecurityContext
+```
+
+#### Luồng 2 - Request API có Bearer token
+
+```text
+Client gọi API bất kỳ có Bearer access_token
+        |
+        v
+JwtAuthenticationFilter
+        |
+        +-- RedisTokenBlacklistService.isAccessTokenBlacklisted(token)
+               |
+               +-- nếu key tồn tại -> trả 403 "Token has been revoked"
+               +-- nếu key không tồn tại -> tiếp tục parse/validate JWT
+```
+
+#### Cơ chế "tự động xóa" trong Redis
+
+- Hệ thống **không tự chạy job xóa blacklist**.
+- Key blacklist được set kèm TTL = thời gian sống còn lại của access token tại lúc logout.
+- Khi TTL về `0`, Redis tự evict key.
+- Ý nghĩa: token đã hết hạn thì key blacklist cũng tự biến mất, tránh phình dữ liệu.
+
+Ví dụ timeline:
+
+- Access token có hạn 30 phút.
+- User logout ở phút thứ 10.
+- Hệ thống set key blacklist với TTL khoảng 20 phút.
+- Sau 20 phút, Redis tự xóa key, vì token đó cũng không còn hợp lệ nữa.
+
+#### Trạng thái suy giảm khi Redis không sẵn sàng
+
+- Theo code hiện tại trong `RedisTokenBlacklistService`:
+  - Nếu Redis lỗi khi ghi blacklist lúc logout -> log `WARN`, không làm fail logout.
+  - Nếu Redis lỗi khi check blacklist lúc request -> log `WARN` và fallback `false` (coi như chưa blacklist).
+- Mục tiêu: giữ API không bị `500` khi Redis tạm thời down.
+- Đánh đổi: trong khoảng Redis down, khả năng chặn token đã revoke sẽ giảm tạm thời.
+
 ## 8) Luồng seed dữ liệu dev
 
 `DevDataSeeder` chạy khi:

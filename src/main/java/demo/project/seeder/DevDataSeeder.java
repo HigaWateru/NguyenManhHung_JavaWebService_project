@@ -40,18 +40,18 @@ public class DevDataSeeder implements CommandLineRunner {
         BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
         Map<String, User> users = new LinkedHashMap<>();
-        users.put("admin.root", newUser("admin.root", "Admin Root", "admin.root@badminton.local", "0901100001", Role.ROLE_ADMIN, "Adm1nRoot@2026", passwordEncoder));
-        users.put("admin.ops", newUser("admin.ops", "Admin Operations", "admin.ops@badminton.local", "0901100002", Role.ROLE_ADMIN, "Adm1nOps@2026", passwordEncoder));
-        users.put("manager.a", newUser("manager.a", "Manager Cluster A", "manager.a@badminton.local", "0902100001", Role.ROLE_MANAGER, "MngA@2026!", passwordEncoder));
-        users.put("manager.b", newUser("manager.b", "Manager Cluster B", "manager.b@badminton.local", "0902100002", Role.ROLE_MANAGER, "MngB@2026!", passwordEncoder));
-        users.put("manager.c", newUser("manager.c", "Manager Cluster C", "manager.c@badminton.local", "0902100003", Role.ROLE_MANAGER, "MngC@2026!", passwordEncoder));
-        users.put("manager.d", newUser("manager.d", "Manager Cluster D", "manager.d@badminton.local", "0902100004", Role.ROLE_MANAGER, "MngD@2026!", passwordEncoder));
-        users.put("customer.a", newUser("customer.a", "Customer A", "customer.a@badminton.local", "0903100001", Role.ROLE_CUSTOMER, "CusA@2026#", passwordEncoder));
-        users.put("customer.b", newUser("customer.b", "Customer B", "customer.b@badminton.local", "0903100002", Role.ROLE_CUSTOMER, "CusB@2026#", passwordEncoder));
-        users.put("customer.c", newUser("customer.c", "Customer C", "customer.c@badminton.local", "0903100003", Role.ROLE_CUSTOMER, "CusC@2026#", passwordEncoder));
-        users.put("customer.d", newUser("customer.d", "Customer D", "customer.d@badminton.local", "0903100004", Role.ROLE_CUSTOMER, "CusD@2026#", passwordEncoder));
-        users.put("customer.e", newUser("customer.e", "Customer E", "customer.e@badminton.local", "0903100005", Role.ROLE_CUSTOMER, "CusE@2026#", passwordEncoder));
-        users.put("customer.f", newUser("customer.f", "Customer F", "customer.f@badminton.local", "0903100006", Role.ROLE_CUSTOMER, "CusF@2026#", passwordEncoder));
+        users.put("admin.root", newUser("admin.root", "Admin Root", "admin.root@badminton.local", "0901100001", Role.ROLE_ADMIN, "adminroot123", passwordEncoder));
+        users.put("admin.ops", newUser("admin.ops", "Admin Operations", "admin.ops@badminton.local", "0901100002", Role.ROLE_ADMIN, "adminops123", passwordEncoder));
+        users.put("manager.a", newUser("manager.a", "Manager Cluster A", "manager.a@badminton.local", "0902100001", Role.ROLE_MANAGER, "managera123", passwordEncoder));
+        users.put("manager.b", newUser("manager.b", "Manager Cluster B", "manager.b@badminton.local", "0902100002", Role.ROLE_MANAGER, "managerb123", passwordEncoder));
+        users.put("manager.c", newUser("manager.c", "Manager Cluster C", "manager.c@badminton.local", "0902100003", Role.ROLE_MANAGER, "managerc123", passwordEncoder));
+        users.put("manager.d", newUser("manager.d", "Manager Cluster D", "manager.d@badminton.local", "0902100004", Role.ROLE_MANAGER, "managerd123", passwordEncoder));
+        users.put("customer.a", newUser("customer.a", "Customer A", "customer.a@badminton.local", "0903100001", Role.ROLE_CUSTOMER, "customera123", passwordEncoder));
+        users.put("customer.b", newUser("customer.b", "Customer B", "customer.b@badminton.local", "0903100002", Role.ROLE_CUSTOMER, "customerb123", passwordEncoder));
+        users.put("customer.c", newUser("customer.c", "Customer C", "customer.c@badminton.local", "0903100003", Role.ROLE_CUSTOMER, "customerc123", passwordEncoder));
+        users.put("customer.d", newUser("customer.d", "Customer D", "customer.d@badminton.local", "0903100004", Role.ROLE_CUSTOMER, "customerd123", passwordEncoder));
+        users.put("customer.e", newUser("customer.e", "Customer E", "customer.e@badminton.local", "0903100005", Role.ROLE_CUSTOMER, "customere123", passwordEncoder));
+        users.put("customer.f", newUser("customer.f", "Customer F", "customer.f@badminton.local", "0903100006", Role.ROLE_CUSTOMER, "customerf123", passwordEncoder));
         userRepository.saveAll(users.values());
 
         BadmintonCluster clusterA = BadmintonCluster.builder().name("SkyBird Arena").address("12 Nguyen Hue, District 1")

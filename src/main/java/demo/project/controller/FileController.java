@@ -2,6 +2,7 @@ package demo.project.controller;
 
 import demo.project.dto.response.ApiResponse;
 import demo.project.dto.response.CourtImageResponse;
+import demo.project.exception.AppException;
 import demo.project.service.FileStorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -21,8 +22,10 @@ public class FileController {
 
     @PostMapping("/courts/{courtId}/images")
     public ResponseEntity<ApiResponse<CourtImageResponse>> addCourtImage(@PathVariable Long courtId, Authentication authentication,
-            @RequestParam("file") MultipartFile file) throws IOException {
-        CourtImageResponse response = fileStorageService.addCourtImage(courtId, file, authentication.getName());
+            @RequestParam(value = "file", required = false) MultipartFile file,
+            @RequestParam(value = "image", required = false) MultipartFile image) throws IOException {
+        MultipartFile uploadFile = resolveUploadFile(file, image);
+        CourtImageResponse response = fileStorageService.addCourtImage(courtId, uploadFile, authentication.getName());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Court image added successfully", response));
     }
 
@@ -34,8 +37,11 @@ public class FileController {
 
     @PutMapping("/courts/{courtId}/images/{imageId}")
     public ResponseEntity<ApiResponse<CourtImageResponse>> updateCourtImage(@PathVariable Long courtId, @PathVariable Long imageId,
-            Authentication authentication, @RequestParam("file") MultipartFile file) throws IOException {
-        CourtImageResponse response = fileStorageService.updateCourtImage(courtId, imageId, file, authentication.getName());
+            Authentication authentication,
+            @RequestParam(value = "file", required = false) MultipartFile file,
+            @RequestParam(value = "image", required = false) MultipartFile image) throws IOException {
+        MultipartFile uploadFile = resolveUploadFile(file, image);
+        CourtImageResponse response = fileStorageService.updateCourtImage(courtId, imageId, uploadFile, authentication.getName());
         return ResponseEntity.ok(ApiResponse.success("Court image updated successfully", response));
     }
 
@@ -44,5 +50,14 @@ public class FileController {
             Authentication authentication) throws IOException {
         fileStorageService.deleteCourtImage(courtId, imageId, authentication.getName());
         return ResponseEntity.ok(ApiResponse.success("Court image deleted successfully", null));
+    }
+
+    private static MultipartFile resolveUploadFile(MultipartFile file, MultipartFile image) {
+        MultipartFile uploadFile = file != null && !file.isEmpty() ? file : image;
+        if (uploadFile == null || uploadFile.isEmpty()) {
+            throw new AppException(HttpStatus.BAD_REQUEST,
+                "File is required. Send multipart/form-data with key 'file' (or 'image').");
+        }
+        return uploadFile;
     }
 }

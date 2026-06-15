@@ -22,21 +22,21 @@ Seeder được đặt tại `src/main/java/demo/project/seeder/DevDataSeeder.ja
 
 | Username | Role | Mật khẩu |
 |---|---|---|
-| `admin.root` | `ROLE_ADMIN` | `Adm1nRoot@2026` |
-| `admin.ops` | `ROLE_ADMIN` | `Adm1nOps@2026` |
-| `manager.a` | `ROLE_MANAGER` | `MngA@2026!` |
-| `manager.b` | `ROLE_MANAGER` | `MngB@2026!` |
-| `manager.c` | `ROLE_MANAGER` | `MngC@2026!` |
-| `manager.d` | `ROLE_MANAGER` | `MngD@2026!` |
-| `customer.a` | `ROLE_CUSTOMER` | `CusA@2026#` |
-| `customer.b` | `ROLE_CUSTOMER` | `CusB@2026#` |
-| `customer.c` | `ROLE_CUSTOMER` | `CusC@2026#` |
-| `customer.d` | `ROLE_CUSTOMER` | `CusD@2026#` |
-| `customer.e` | `ROLE_CUSTOMER` | `CusE@2026#` |
-| `customer.f` | `ROLE_CUSTOMER` | `CusF@2026#` |
+| `admin.root` | `ROLE_ADMIN` | `adminroot123` |
+| `admin.ops` | `ROLE_ADMIN` | `adminops123` |
+| `manager.a` | `ROLE_MANAGER` | `managera123` |
+| `manager.b` | `ROLE_MANAGER` | `managerb123` |
+| `manager.c` | `ROLE_MANAGER` | `managerc123` |
+| `manager.d` | `ROLE_MANAGER` | `managerd123` |
+| `customer.a` | `ROLE_CUSTOMER` | `customera123` |
+| `customer.b` | `ROLE_CUSTOMER` | `customerb123` |
+| `customer.c` | `ROLE_CUSTOMER` | `customerc123` |
+| `customer.d` | `ROLE_CUSTOMER` | `customerd123` |
+| `customer.e` | `ROLE_CUSTOMER` | `customere123` |
+| `customer.f` | `ROLE_CUSTOMER` | `customerf123` |
 
 ## Gợi ý kiểm tra nhanh
 
-- Đăng nhập nhanh bằng `admin.root` / `Adm1nRoot@2026`
+- Đăng nhập nhanh bằng `admin.root` / `adminroot123`
 - Query DB để kiểm tra các bảng `users`, `badminton_clusters`, `courts`, `bookings`
 

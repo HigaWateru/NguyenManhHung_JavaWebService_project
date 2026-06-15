@@ -8,27 +8,27 @@ Tạo environment và thêm các biến sau:
 
 - `BASE_URL = http://localhost:8080`
 - `ADMIN_USERNAME = admin.root`
-- `ADMIN_PASSWORD = Adm1nRoot@2026`
+- `ADMIN_PASSWORD = adminroot123`
 - `MANAGER_USERNAME = manager.a`
-- `MANAGER_PASSWORD = MngA@2026!`
+- `MANAGER_PASSWORD = managera123`
 - `CUSTOMER_USERNAME = customer.a`
-- `CUSTOMER_PASSWORD = CusA@2026#`
+- `CUSTOMER_PASSWORD = customera123`
 - `ADMIN_ACCESS_TOKEN =` (để trống ban đầu)
 - `MANAGER_ACCESS_TOKEN =` (để trống ban đầu)
 - `CUSTOMER_ACCESS_TOKEN =` (để trống ban đầu)
 - `REFRESH_TOKEN =` (để trống ban đầu)
 
 > Lưu ý:
-> - Không còn seed password chung `123456`.
+> - Password seed hiện dùng theo bộ dễ nhớ trong `DevDataSeeder` (ví dụ: `adminroot123`, `managera123`, `customera123`).
 > - API dưới `/api/v1/admin/**`, `/api/v1/manager/**`, `/api/v1/customer/**`, `/api/v1/files/**` cần bearer token đúng role.
 
 ## 2) Bộ tài khoản seed để test nhanh
 
 | Role | Username | Password |
 |---|---|---|
-| Admin | `admin.root` | `Adm1nRoot@2026` |
-| Manager | `manager.a` | `MngA@2026!` |
-| Customer | `customer.a` | `CusA@2026#` |
+| Admin | `admin.root` | `adminroot123` |
+| Manager | `manager.a` | `managera123` |
+| Customer | `customer.a` | `customera123` |
 
 Tham khảo đầy đủ danh sách account tại `docx/DATA_SEED.md`.
 
@@ -198,6 +198,91 @@ Header chung: `Authorization: Bearer {{MANAGER_ACCESS_TOKEN}}`
 - `GET {{BASE_URL}}/api/v1/files/courts/{courtId}/images`
 - `PUT {{BASE_URL}}/api/v1/files/courts/{courtId}/images/{imageId}` (form-data: `file`)
 - `DELETE {{BASE_URL}}/api/v1/files/courts/{courtId}/images/{imageId}`
+
+### 6.1 Chuẩn bị ảnh để test
+
+- Tạo sẵn thư mục ảnh test, ví dụ: `D:\code\Rest API\project\docx\test-images`
+- Đặt 2 file ảnh để test nhanh:
+  - `court-ok.png` (ảnh nhỏ, ví dụ 500x500)
+  - `court-update.jpg` (ảnh khác để test update)
+- Định dạng nên dùng: `png`, `jpg`, `jpeg`, `webp`, `gif`
+
+### 6.2 Cách chọn ảnh upload trong Postman (rất chi tiết)
+
+Áp dụng cho API `POST /api/v1/files/courts/{courtId}/images`:
+
+1. Tạo request mới trong Postman.
+2. Chọn method `POST`.
+3. URL ví dụ: `{{BASE_URL}}/api/v1/files/courts/1/images`
+4. Vào tab `Authorization`:
+   - Type: `Bearer Token`
+   - Token: `{{MANAGER_ACCESS_TOKEN}}`
+5. Vào tab `Body` -> chọn `form-data`.
+6. Thêm 1 dòng key:
+   - Cột **Key**: nhập `file`
+   - Cột bên phải key (mặc định là `Text`): đổi từ `Text` sang **`File`**
+7. Sau khi chọn `File`, cột Value sẽ có nút **Select Files**.
+8. Bấm **Select Files** -> chọn ảnh từ máy (ví dụ `court-ok.png`) -> Open.
+9. Bấm `Send`.
+
+> Quan trọng:
+> - Key bắt buộc phải đúng tên `file`.
+> - Nếu để `Text` thay vì `File`, backend sẽ không nhận được ảnh.
+> - Không cần tự set `Content-Type: multipart/form-data`, Postman sẽ tự set đúng boundary.
+
+### 6.3 Luồng test đầy đủ cho File API
+
+#### Bước A - Upload ảnh mới
+
+- Method: `POST`
+- URL: `{{BASE_URL}}/api/v1/files/courts/1/images`
+- Body: `form-data` với `file` (kiểu `File`)
+- Kỳ vọng: `200/201` (tùy controller), trả về thông tin ảnh đã upload.
+
+#### Bước B - Lấy danh sách ảnh của court
+
+- Method: `GET`
+- URL: `{{BASE_URL}}/api/v1/files/courts/1/images`
+- Kỳ vọng: danh sách có ảnh vừa upload, lấy `imageId` để dùng cho bước C/D.
+
+#### Bước C - Update ảnh theo `imageId`
+
+- Method: `PUT`
+- URL: `{{BASE_URL}}/api/v1/files/courts/1/images/{imageId}`
+- Body: `form-data` với `file` (chọn `court-update.jpg`)
+- Kỳ vọng: ảnh được cập nhật thành URL/public id mới.
+
+#### Bước D - Xóa ảnh
+
+- Method: `DELETE`
+- URL: `{{BASE_URL}}/api/v1/files/courts/1/images/{imageId}`
+- Kỳ vọng: xóa thành công, gọi lại GET sẽ không còn ảnh đó.
+
+### 6.4 Lỗi thường gặp khi chọn ảnh upload
+
+1. **Không thấy nút Select Files**
+   - Nguyên nhân: key đang để `Text`.
+   - Cách xử lý: đổi kiểu của key sang `File`.
+
+2. **Backend báo thiếu file / invalid request**
+   - Nguyên nhân: key không phải `file` hoặc body không phải `form-data`.
+   - Cách xử lý: dùng đúng key `file`, tab Body là `form-data`.
+
+3. **403 Forbidden**
+   - Nguyên nhân: dùng token sai role hoặc manager không sở hữu court.
+   - Cách xử lý: dùng `{{MANAGER_ACCESS_TOKEN}}` đúng manager của cụm sân.
+
+4. **400 Only image file types are allowed**
+   - Nguyên nhân: upload file không phải ảnh (txt/pdf...).
+   - Cách xử lý: chọn file đuôi ảnh hợp lệ (`png/jpg/jpeg/webp/gif`).
+
+5. **400 File size must be less than or equal to 50MB**
+   - Nguyên nhân: ảnh quá lớn.
+   - Cách xử lý: giảm dung lượng ảnh trước khi upload.
+
+6. **400 Image dimensions exceed allowed limit**
+   - Nguyên nhân: kích thước ảnh vượt ngưỡng hệ thống cho phép.
+   - Cách xử lý: resize ảnh xuống nhỏ hơn giới hạn.
 
 ## 7) Negative test gợi ý
 

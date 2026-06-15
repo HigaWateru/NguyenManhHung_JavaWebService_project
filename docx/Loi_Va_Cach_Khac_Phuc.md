@@ -89,3 +89,133 @@
 #### 5. Khuyến nghị cải thiện
 - Bổ sung handler cho `MissingServletRequestParameterException` trong `GlobalExceptionHandler` để trả `400` và message rõ ràng hơn.
 - Có thể thêm ví dụ query param vào tài liệu API để tránh gọi thiếu tham số.
+
+---
+
+### Báo cáo lỗi và Giải pháp khắc phục (Search User 500 do Redis không kết nối được)
+
+#### 1. Mô tả lỗi (Issue)
+- **API bị ảnh hưởng**: `GET /api/v1/admin/users?keyword=...&page=...&size=...`
+- **Thông báo lỗi**:
+  - `status: 500 Internal Server Error`
+  - `RedisConnectionFailureException: Unable to connect to Redis`
+- **Bối cảnh**: API có Bearer token hợp lệ nhưng request vẫn fail khi Redis đang down/chưa chạy.
+
+#### 2. Nguyên nhân kỹ thuật
+- Trong `JwtAuthenticationFilter.java`, mỗi request có token sẽ gọi `RedisTokenBlacklistService.isAccessTokenBlacklisted(...)` để kiểm tra token đã revoke chưa.
+- Khi Redis không truy cập được, `StringRedisTemplate` ném `RedisConnectionFailureException`.
+- Exception này không được xử lý tại service blacklist nên bị đẩy lên thành HTTP `500`.
+
+#### 3. Giải pháp đã áp dụng
+- Cập nhật `src/main/java/demo/project/security/jwt/RedisTokenBlacklistService.java`:
+  - Bọc thao tác Redis bằng `try/catch` cho `RedisConnectionFailureException` và `DataAccessException`.
+  - Với `isAccessTokenBlacklisted(...)`: fallback trả `false` (không chặn request) khi Redis unavailable để giữ API hoạt động.
+  - Với `blacklistAccessToken(...)`: không ném lỗi ra ngoài khi Redis unavailable, chỉ log cảnh báo.
+- Bổ sung test mới tại `src/test/java/demo/project/security/jwt/RedisTokenBlacklistServiceTest.java` để xác nhận fallback behavior khi Redis lỗi kết nối.
+
+#### 4. Kết quả mong đợi sau fix
+- API search user không còn văng `500` chỉ vì Redis tạm thời không kết nối được.
+- Chức năng xác thực JWT vẫn chạy bình thường (trừ khả năng revoke-check bị degrade tạm thời trong lúc Redis down).
+
+#### 5. Khuyến nghị vận hành
+- Trong môi trường dev/local: đảm bảo Redis chạy trước khi test logout/revoke token.
+- Trong production: nên dùng Redis HA hoặc cơ chế healthcheck + alert để giảm thời gian mất kết nối.
+
+---
+
+### Báo cáo lỗi và Giải pháp khắc phục (Update User báo `Request method 'PUT' is not supported`)
+
+#### 1. Mô tả lỗi (Issue)
+- **API bị ảnh hưởng**: update user role trong module admin.
+- **Thông báo nhận được**:
+  - `Request method 'PUT' is not supported`
+  - Response hiển thị `status: 500`.
+- **Request gây lỗi phổ biến**: `PUT /api/v1/admin/users` (không có `/{id}`).
+
+#### 2. Nguyên nhân kỹ thuật
+- Trong `AdminUserController.java`, endpoint update được khai báo là `@PutMapping("/{id}")` dưới base path `/api/v1/admin/users`.
+- URL đúng bắt buộc phải có path variable `id`: `/api/v1/admin/users/{id}`.
+- Khi gọi `PUT /api/v1/admin/users`, Spring ném `HttpRequestMethodNotSupportedException`.
+- `GlobalExceptionHandler.java` trước đó chưa handle exception này, nên bị bắt bởi handler tổng quát `Exception.class` và trả nhầm `500`.
+
+#### 3. Giải pháp đã áp dụng
+- Cập nhật `src/main/java/demo/project/exception/GlobalExceptionHandler.java`:
+  - Thêm `@ExceptionHandler(HttpRequestMethodNotSupportedException.class)`.
+  - Trả về HTTP `405 Method Not Allowed` với message gốc từ Spring.
+
+#### 4. Cách gọi đúng endpoint update
+- URL: `PUT /api/v1/admin/users/{id}`
+- Ví dụ: `PUT /api/v1/admin/users/5`
+- Payload mẫu:
+
+```json
+{
+  "username": "manager.updated",
+  "email": "manager.updated@badminton.local",
+  "password": "managerupdated123",
+  "role": "ROLE_ADMIN",
+  "enabled": true
+}
+```
+
+#### 5. Kết quả mong đợi
+- Gọi sai URL (`PUT /api/v1/admin/users`) -> trả `405` (thay vì `500`).
+- Gọi đúng URL (`PUT /api/v1/admin/users/{id}`) -> xử lý update bình thường theo business logic.
+
+---
+
+### Báo cáo lỗi và Giải pháp khắc phục (Upload ảnh báo `Required part 'file' is not present`)
+
+#### 1. Mô tả lỗi (Issue)
+- **API bị ảnh hưởng**: `POST /api/v1/files/courts/{courtId}/images`
+- **Thông báo nhận được**:
+  - `Required part 'file' is not present.`
+  - Response trước khi fix hiển thị `status: 500`.
+
+#### 2. Nguyên nhân kỹ thuật
+- Endpoint upload yêu cầu multipart field tên `file`.
+- Khi request không gửi đúng part `file` (hoặc body không phải `form-data`), Spring ném `MissingServletRequestPartException`.
+- `GlobalExceptionHandler` trước đó chưa có handler riêng cho exception này nên rơi vào handler tổng quát `Exception.class` và trả `500`.
+
+#### 3. Giải pháp đã áp dụng
+- Cập nhật `src/main/java/demo/project/exception/GlobalExceptionHandler.java`:
+  - Thêm `@ExceptionHandler(MissingServletRequestPartException.class)` -> trả `400 Bad Request`.
+  - Thêm `@ExceptionHandler(MissingServletRequestParameterException.class)` -> trả `400 Bad Request`.
+- Cập nhật `src/main/java/demo/project/controller/FileController.java`:
+  - Endpoint upload/update nhận linh hoạt cả key `file` và `image` trong `form-data`.
+  - Nếu không có file hợp lệ, trả message rõ ràng hơn: `File is required. Send multipart/form-data with key 'file' (or 'image').`
+- Kết quả: lỗi phía client (thiếu part/thiếu param) không còn bị map sai thành lỗi server `500`.
+
+#### 4. Cách gọi đúng trên Postman (để không thiếu part `file`)
+1. Chọn method `POST` và URL `{{BASE_URL}}/api/v1/files/courts/1/images`.
+2. Vào tab `Authorization` -> `Bearer Token` -> dán `{{MANAGER_ACCESS_TOKEN}}`.
+3. Vào tab `Body` -> chọn `form-data`.
+4. Tạo key đúng chính tả: `file`.
+5. Ở cột type của key `file`, đổi từ `Text` sang `File`.
+6. Bấm `Select Files` và chọn ảnh từ máy.
+7. Không tự set cứng header `Content-Type`; để Postman tự set `multipart/form-data`.
+
+#### 5. Kết quả mong đợi sau fix
+- Nếu thiếu part `file` -> trả `400` với message rõ ràng.
+- Nếu gửi đúng multipart (`file` hợp lệ) -> upload chạy bình thường theo nghiệp vụ/permission hiện có.
+
+#### 6. Trường hợp vẫn gặp `Required part 'file' is not present`
+- Kiểm tra nhanh theo thứ tự:
+  1. Body đang là `form-data` (không phải `raw`, không phải `binary`).
+  2. Key tên `file` hoặc `image`.
+  3. Type của key là `File` (không phải `Text`).
+  4. Không set cứng header `Content-Type: application/json`.
+  5. Trong tab `Headers`, nếu có `Content-Type` tự thêm tay thì xóa đi để Postman tự set `multipart/form-data; boundary=...`.
+- Sau khi sửa, gửi lại request mới (không dùng tab cũ bị cache header).
+
+#### 7. Trường hợp báo `No static resource .../api/v1/files/courts/{id}/images`
+- Dấu hiệu: response trước đây có thể hiện `status: 500`, message kiểu `No static resource ...`.
+- Nguyên nhân thực tế: request không match endpoint API (sai path hoặc sai HTTP method), rồi rơi sang static resource handler.
+- Cập nhật đã áp dụng trong `GlobalExceptionHandler`:
+  - Handle `NoResourceFoundException` -> trả `404 Not Found` với message rõ hơn.
+- Checklist xử lý:
+  1. Method đúng là `POST` cho upload mới.
+  2. URL đúng: `/api/v1/files/courts/{courtId}/images`.
+  3. Không gõ dư ký tự cuối URL (khoảng trắng, xuống dòng).
+  4. Nếu vừa đổi code, restart lại app để nạp mapping mới.
+
