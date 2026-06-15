@@ -358,3 +358,6 @@ Nếu cần, có thể tách tài liệu này thành 3 file riêng: **luồng au
 - `JwtAuthenticationFilter` chuyển sang check blacklist qua `RedisTokenBlacklistService.isAccessTokenBlacklisted(token)`.
 - `TokenBlacklistRepository` đổi sang `CrudRepository<TokenBlacklist, String>` và bỏ các method query theo kiểu JPA cũ.
 
+Tài liệu bổ sung để dễ hình dung Redis blacklist token:
+- `docx/LUONG_REDIS_BLACKLIST_TOKEN.md`
+
